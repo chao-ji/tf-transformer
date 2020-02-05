@@ -1,9 +1,12 @@
+"""Defines Transformation model in keras API.
+"""
 import tensorflow as tf
 
-import utils
 import beam_search 
+import utils
 
 NEG_INF = -1e9
+SOS_ID = 0
 EOS_ID = 1
 
 
@@ -580,7 +583,7 @@ class Decoder(tf.keras.layers.Layer):
     return outputs
 
 
-class Transformer(tf.keras.Model):
+class TransformerModel(tf.keras.Model):
   """Transformer model as described in https://arxiv.org/abs/1706.03762
 
   The model implements methods `call` and `transduce`, where
@@ -595,7 +598,7 @@ class Transformer(tf.keras.Model):
                hidden_size=512, 
                num_heads=8, 
                filter_size=2048, 
-               vocab_size=33708,
+               vocab_size=33945,
                dropout_rate=0.1,
                extra_decode_length=50,
                beam_width=4,
@@ -609,8 +612,8 @@ class Transformer(tf.keras.Model):
       num_heads: int scalar, num of attention heads.
       filter_size: int scalar, the depth of the intermediate dense layer of the
         feed-forward sublayer.
-      vocab_size: int scalar, num of tokens (including SOS and EOS) in the 
-        vocabulary. 
+      vocab_size: int scalar, num of subword tokens (including SOS and EOS/PAD) 
+        in the vocabulary. 
       dropout_rate: float scalar, dropout rate for the Dropout layers.
       extra_decode_length: int scalar, the max decode length would be the sum of
         `tgt_seq_len` and `extra_decode_length`.
@@ -618,12 +621,13 @@ class Transformer(tf.keras.Model):
       alpha: float scalar, the parameter for length normalization used in beam 
         search.
     """
-    super(Transformer, self).__init__()
+    super(TransformerModel, self).__init__()
     self._encoder_stack_size = encoder_stack_size
     self._decoder_stack_size = decoder_stack_size
     self._hidden_size = hidden_size
     self._num_heads = num_heads
     self._filter_size = filter_size
+    self._vocab_size = vocab_size
     self._dropout_rate = dropout_rate
     self._extra_decode_length = extra_decode_length
     self._beam_width = beam_width
@@ -709,8 +713,10 @@ class Transformer(tf.keras.Model):
     """
     tgt_seq_len = tf.shape(tgt_token_ids)[1]
 
+    # [batch_size, tgt_seq_len, hidden_size]
     tgt_token_embeddings = self._embedding_logits_layer(
         tgt_token_ids, 'embedding')
+
     positional_encoding = utils.get_positional_encoding(
         tgt_seq_len, self._hidden_size)
     tgt_token_embeddings += positional_encoding
@@ -742,45 +748,64 @@ class Transformer(tf.keras.Model):
       scores: float tensor of shape [batch_size], the scores (length-normalized 
         log-probs) of the decoded target sequences.
     """
-    padding_mask = utils.get_padding_mask(src_token_ids)
-    encoder_outputs = self._encode(src_token_ids, padding_mask, False)
+    batch_size, src_seq_len = tf.unstack(tf.shape(src_token_ids))
+    max_decode_length = src_seq_len + self._extra_decode_length
 
-    batch_size = tf.shape(encoder_outputs)[0]
-    input_length = tf.shape(encoder_outputs)[1]
-    max_decode_length = input_length + self._extra_decode_length
-
-    initial_ids = tf.zeros([batch_size], dtype='int32')
-    init_decode_length = 0
-    size_per_head = self._hidden_size // self._num_heads
-    
     decoding_fn = self._build_decoding_fn(max_decode_length)
+    decoding_cache = self._build_decoding_cache(src_token_ids, batch_size)
+    sos_ids = tf.ones([batch_size], dtype='int32') * SOS_ID
 
-    initial_cache = {'layer_%d' % layer: 
-        {'k':
-            tf.zeros([
-                batch_size, init_decode_length, self._num_heads, size_per_head 
-            ], 'float32'),
-         'v':
-            tf.zeros([
-                batch_size, init_decode_length, self._num_heads, size_per_head
-            ], 'float32')
-        } for layer in range(self._decoder._stack_size)
-    }
+    bs = beam_search.BeamSearch(decoding_fn, 
+                                self._embedding_logits_layer._vocab_size, 
+                                batch_size,
+                                self._beam_width, 
+                                self._alpha, 
+                                max_decode_length, 
+                                EOS_ID)
+    decoded_ids, scores = bs.search(sos_ids, decoding_cache)
 
-    initial_cache["encoder_outputs"] = encoder_outputs
-    initial_cache["padding_mask"] = padding_mask
-
-    decoded_ids, scores = beam_search.sequence_beam_search(decoding_fn,
-                         initial_ids,
-                         initial_cache,
-                         self._embedding_logits_layer._vocab_size,
-                         self._beam_width,
-                         self._alpha,
-                         max_decode_length,
-                         EOS_ID)
     decoded_ids = decoded_ids[:, 0, 1:]
     scores = scores[:, 0] 
     return decoded_ids, scores 
+
+  def _build_decoding_cache(self, src_token_ids, batch_size):
+    """Builds a dictionary that caches previously computed key and value feature
+    maps of the growing decoded sequence.
+
+    Args:
+      src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids of 
+        source sequences. 
+      batch_size: int scalar, num of sequences in a batch.
+
+    Returns:
+      decoding_cache: dict of entries
+          'encoder_outputs': tensor of shape [batch_size, src_seq_len, 
+            hidden_size],
+          'padding_mask': tensor of shape [batch_size, 1, 1, src_seq_len],
+
+          and entries with keys 'layer_0',...,'layer_[decoder_num_layers - 1]'
+          where the value associated with key 'layer_*' is a dict with entries
+            'k': tensor of shape [batch_size, 0, num_heads, size_per_head],
+            'v': tensor of shape [batch_size, 0, num_heads, size_per_head].
+    """
+    padding_mask = utils.get_padding_mask(src_token_ids)
+    encoder_outputs = self._encode(src_token_ids, padding_mask, training=False)
+    size_per_head = self._hidden_size // self._num_heads
+
+    decoding_cache = {'layer_%d' % layer:
+        {'k':
+            tf.zeros([
+                batch_size, 0, self._num_heads, size_per_head
+            ], 'float32'),
+         'v':
+            tf.zeros([
+                batch_size, 0, self._num_heads, size_per_head
+            ], 'float32')
+        } for layer in range(self._decoder._stack_size)
+    }
+    decoding_cache["encoder_outputs"] = encoder_outputs
+    decoding_cache["padding_mask"] = padding_mask
+    return decoding_cache
 
   def _build_decoding_fn(self, max_decode_length):
     """Builds the decoding function that computs the decoded sequences using
@@ -840,4 +865,3 @@ class Transformer(tf.keras.Model):
       return logits, cache
 
     return decoding_fn 
-
