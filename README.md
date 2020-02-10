@@ -1,11 +1,19 @@
 # TensorFlow 2.x Implementation of Transformer Model for Neural Machine Translation 
 
-This is a TensorFlow 2.x implementation of Transformer model ([https://arxiv.org/abs/1706.03762](Attention is all you need)) for Neural Machine Translation (NMT). 
+This is a TensorFlow 2.x implementation of Transformer model ([Attention is all you need](https://arxiv.org/abs/1706.03762])) for Neural Machine Translation (NMT). 
 
 ## Transformer Model
 Transformer is a novel yet simple network architecture for sequence modeling. Unlike other neural sequence modeling approaches where the dependence relationship between symbols is baked into the architecture of Recurrent Neural Networks (RNN), the Transformer models the symbol-to-symbol dependence relationship solely based on attention mechanism, dispensing with the sequential computation of RNNs. 
 
 At the core of the Transformer model is the *self-attention* mechanism used by the *encoder*, where we encode a sequence of symbols by making each symbol *attend* to other symbols in the same sequence. Specifically, each symbol `s` (embedding vector of a word or subword token) is first transformed into three vectors, namely the `query`, the `key`, and the `value`. Then a new representation of the symbol `s` is computed as the average of the `value` vectors across each and every symbol `t` in the sequence, weighted by the similarity between the `query` of `s` and the `key` of `t`. Because the similarity is simply computed as the dot product, one can flexibly model the dependence between any two symbols, regardless of their distance in the sequence.
+
+<p align="center ">
+  <img src="g3doc/images/attention.png" width="600">
+
+  <br>
+  Computing the pairwise token-to-token similarity matrix by dot product
+</p>
+
 
 The idea of self-attention so influtial, which led to more recent breakthroughs in methods of language model pretraining such as BERT and GPT-2.
 
