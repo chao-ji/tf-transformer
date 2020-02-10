@@ -42,7 +42,7 @@ source_file_n.txt   target_file_n.txt
 
 You need to convert raw text files into TFRecord files, by running
 ```bash
-python tfrecord.py \
+python data/tfrecord.py \
   --source_filenames=source_file_1.txt,source_file_2.txt,...,source_file_2.txt \
   --target_filenames=target_file_1.txt,target_file_2.txt,...,target_file_2.txt \
   --output_dir=/path/to/tfrecord/directory \
@@ -52,7 +52,7 @@ Note: this process involves "learning" a vocabulary of subword tokens from the t
 
 For detailed usage info, run
 ```bash
-python tfrecord.py --help
+python data/tfrecord.py --help
 ``` 
 
 ## Training
