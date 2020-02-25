@@ -575,26 +575,3 @@ class BleuTokenizer(object):
     string = self._punct_nondigit_re.sub(r" \1 \2", string)
     string = self._symbol_re.sub(r" \1 ", string)
     return string.split()
-
-
-
-if __name__ == '__main__':
-  path = '/home/chaoji/Desktop/translate_ende_raw/'
-
-  train_files_flat = ['training/news-commentary-v12.de-en.en', 'commoncrawl.de-en.en', 'training/europarl-v7.de-en.en',
-    'training/news-commentary-v12.de-en.de', 'commoncrawl.de-en.de', 'training/europarl-v7.de-en.de']
-  #train_files_flat = ['training/train.en', 'training/train.zh']
-  train_files_flat = [os.path.join(path, i) for i in train_files_flat]
- 
-
-  # _count_tokens
-  files = train_files_flat
-  file_byte_limit = 1e6 #1e7 #1e6
-
-  #_save_vocab_file('vocab', subtoken_list)
-  target_vocab_size = 32768
-  threshold = 327
-  min_count = 6#None # 6 
-  subtokenizer = create_subtokenizer_from_raw_text_files(files, target_vocab_size, threshold, min_count=min_count, file_byte_limit=file_byte_limit)
-   
-  subtokenizer.save_to_file('vocab')
