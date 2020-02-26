@@ -79,7 +79,7 @@ def main(_):
 
   subtokenizer = tokenization.restore_subtokenizer_from_vocab_files(vocab_path)
 
-  vocab_size = 33708 # subtokenizer.vocab_size
+  vocab_size = subtokenizer.vocab_size
   model = TransformerModel(encoder_stack_size=encoder_stack_size,
                            decoder_stack_size=decoder_stack_size,
                            hidden_size=hidden_size,
@@ -91,7 +91,7 @@ def main(_):
   ckpt = tf.train.Checkpoint(model=model)
 
   latest_ckpt = tf.train.latest_checkpoint(model_dir)
-  print(latest_ckpt, '\n\n\n')
+
   ckpt.restore(latest_ckpt).expect_partial()
 
 
