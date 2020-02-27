@@ -93,16 +93,15 @@ class SubTokenizer(object):
     """
     subtoken_ids = [] 
     tokens = _split_string_to_tokens(string)
-    #print('tokens', tokens)
+  
     for token in tokens:
       if token not in self._token_seen:
-        #print('escaped', "'" + _escape_token(token, self._alphabet) + "'")
+ 
         subtokens = _split_token_to_subtokens(
             _escape_token(token, self._alphabet),  
             self._subtoken_dict, 
             self._max_subtoken_length)
-        #print('subtokens', subtokens)
-        #print()
+
         self._token_seen[token] = [
             self._subtoken_dict[subtoken] for subtoken in subtokens] 
       subtoken_ids.extend(self._token_seen[token]) 
@@ -131,11 +130,11 @@ class SubTokenizer(object):
     """
     escaped_tokens = [self._subtoken_list[id_] for id_ in subtoken_ids 
         if id_ < self.vocab_size]
-    #print(escaped_tokens)
+
     escaped_tokens = ''.join(escaped_tokens)
-    #print(escaped_tokens)
+
     escaped_tokens = escaped_tokens.split('_')
-    #print(escaped_tokens)
+
     tokens = []
     for token in escaped_tokens:
       if token:
