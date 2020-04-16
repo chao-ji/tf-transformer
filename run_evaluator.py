@@ -102,7 +102,8 @@ def main(_):
   case_insensitive_score, case_sensitive_score = evaluator.evaluate(
       source_text_filename, target_text_filename, translation_output_filename) 
 
-  print(case_insensitive_score, case_sensitive_score)
+  print('BLEU(case intensirive): %f' % case_insensitive_score)
+  print('BLEU(case sensitive): %f' % case_sensitive_score)
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('source_text_filename')

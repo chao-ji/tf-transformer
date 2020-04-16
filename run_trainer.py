@@ -38,13 +38,6 @@ flags.DEFINE_integer(
         'feed-forward sublayer.')
 flags.DEFINE_float(
     'dropout_rate', 0.1, 'Dropout rate for the Dropout layers.')
-#flags.DEFINE_integer(
-#    'extra_decode_length', 50, 'The max decode length would be'
-#        ' the sum of `tgt_seq_len` and `extra_decode_length`.')
-#flags.DEFINE_integer(
-#    'beam_width', 4, 'Beam width for beam search.')
-#flags.DEFINE_float(
-#    'alpha', 0.6, 'The parameter for length normalization used in beam search.')
 
 flags.DEFINE_integer(
     'max_num_tokens', 4096, 'The maximum num of tokens in each batch.')
@@ -88,9 +81,6 @@ def main(_):
   num_heads = FLAGS.num_heads
   filter_size = FLAGS.filter_size
   dropout_rate = FLAGS.dropout_rate
-  #extra_decode_length = FLAGS.extra_decode_length
-  #beam_width = FLAGS.beam_width
-  #alpha = FLAGS.alpha
 
   max_num_tokens = FLAGS.max_num_tokens
   max_length = FLAGS.max_length
@@ -108,7 +98,7 @@ def main(_):
 
   # transformer model
   subtokenizer = tokenization.restore_subtokenizer_from_vocab_files(vocab_path)
-  vocab_size = subtokenizer.vocab_size # 33671#33945
+  vocab_size = subtokenizer.vocab_size 
   model = TransformerModel(encoder_stack_size=encoder_stack_size,
                            decoder_stack_size=decoder_stack_size,
                            hidden_size=hidden_size, 
