@@ -115,9 +115,9 @@ class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
       warmup_steps: int scalar, the num of warm-up steps
     """
     super(LearningRateSchedule, self).__init__()
-    self.learning_rate = learning_rate
-    self.hidden_size = hidden_size
-    self.warmup_steps = tf.cast(warmup_steps, 'float32')
+    self._learning_rate = learning_rate
+    self._hidden_size = hidden_size
+    self._warmup_steps = tf.cast(warmup_steps, 'float32')
 
   def __call__(self, global_step):
     """Compute learning rate with linear warmup and rsqrt decay.
@@ -130,12 +130,12 @@ class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         the input `global_step`. 
     """
     global_step = tf.cast(global_step, 'float32')
-    learning_rate = self.learning_rate
-    learning_rate *= (self.hidden_size**-0.5)
+    learning_rate = self._learning_rate
+    learning_rate *= (self._hidden_size**-0.5)
     # linear warmup
-    learning_rate *= tf.minimum(1.0, global_step / self.warmup_steps)
+    learning_rate *= tf.minimum(1.0, global_step / self._warmup_steps)
     # rsqrt decay
-    learning_rate /= tf.sqrt(tf.maximum(global_step, self.warmup_steps))
+    learning_rate /= tf.sqrt(tf.maximum(global_step, self._warmup_steps))
     return learning_rate
 
 def create_optimizer(learning_rate, beta1, beta2, epsilon):
