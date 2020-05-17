@@ -1,22 +1,24 @@
-"""Defines Transformation model in keras API.
-"""
+"""Defines Transformer model in tf.keras API."""
 import tensorflow as tf
 
 import beam_search 
 import utils
 
+
+# large negative value considered numerically as -inf
 NEG_INF = -1e9
+# vocab index of START-OF-SEQUENCE token (or PADDING token)
 SOS_ID = 0
+# vocab index of END-OF-SEQUENCE token
 EOS_ID = 1
 
 
 class Projection(tf.keras.layers.Layer):
-  """Linearly projects a batch of continuously represented query or reference 
-  sequences.
+  """Linearly projects a batch of continuously represented sequences of tokens.
 
-  The projection operates in either "split" mode or "merge" mode:
+  This projection layer operates in either Split mode or Merge mode:
 
-    - "split" mode converts the input sequences in the original representation 
+    - Split mode converts the input sequences in the original representation 
       into the multi-headed "query", "key" or "value" for the attention 
       computation. 
 
@@ -24,8 +26,8 @@ class Projection(tf.keras.layers.Layer):
       Weight: [hidden_size(D), num_heads(H), size_per_head(S)]
       Output: dot([N*T, D], [D, H*S]) reshape ==> [N, T, H, S]
 
-    - "merge" mode is the opposite of "split", which converts the multi-headed 
-      "value" back to the original representation.
+    - Merge mode performs the opposite action of Split, converting the 
+      multi-headed "value" back to the original representation.
 
       Input: [batch_size(N), seq_len(T), num_heads(H), size_per_head(S)]
       Weight: [num_heads(H), size_per_head(S), hidden_size(D)]
@@ -54,7 +56,7 @@ class Projection(tf.keras.layers.Layer):
     self._mode = mode
 
   def build(self, inputs_shape):
-    """Creates variables of this layer.
+    """Creates weights of this layer.
 
     Args:
       inputs_shape: tuple of ints or 1-D int tensor, the last element 
@@ -62,12 +64,12 @@ class Projection(tf.keras.layers.Layer):
     """
     depth = inputs_shape[-1]
     if depth is None: 
-      raise ValueError('The depth of inputs must be not be None.')
+      raise ValueError('The depth of inputs must not be None.')
 
     if self._mode == 'merge':
-      kernel_shape = (self._num_heads, self._size_per_head, self._hidden_size)
+      kernel_shape = self._num_heads, self._size_per_head, self._hidden_size
     else:
-      kernel_shape = (self._hidden_size, self._num_heads, self._size_per_head)
+      kernel_shape = self._hidden_size, self._num_heads, self._size_per_head
 
     self.add_weight(name='kernel',
                     shape=kernel_shape,
@@ -81,15 +83,15 @@ class Projection(tf.keras.layers.Layer):
 
     Args:
       inputs: float tensor of shape [batch_size, seq_len, num_heads, 
-        size_per_head] in "merge" mode, or float tensor of shape [batch_size, 
-        seq_len, hidden_size] in "split" mode.
+        size_per_head] in Merge mode, or float tensor of shape [batch_size, 
+        seq_len, hidden_size] in Split mode.
 
     Returns:
       outputs: float tensor of shape [batch_size, seq_len, hidden_size] in 
-        "merge" mode, or float tensor of shape [batch_size, seq_len, num_heads, 
-        size_per_head] int "split" mode.
+        Merge mode, or float tensor of shape [batch_size, seq_len, num_heads, 
+        size_per_head] int Split mode.
     """
-    kernel = self.trainable_variables[0] 
+    kernel = self.trainable_variables[0]
     if self._mode == 'merge':
       outputs = tf.einsum('NTHS,HSD->NTD', inputs, kernel)
     else:
@@ -100,14 +102,14 @@ class Projection(tf.keras.layers.Layer):
 class Attention(tf.keras.layers.Layer):
   """Multi-headed attention layer.
 
-  Given a batch of query sequences (tensor of shape [batch_size, q_seq_len, 
-  hidden_size]) and a batch of reference sequences (tensor of shape [batch_size,
-  r_seq_len, hidden_size]) in continuous representation, this layer computes a 
-  new representation of the query sequences by making them selectively attend to
+  Given a batch of continuously represented query sequences (tensor of shape [
+  batch_size, q_seq_len, hidden_size]) and reference sequences (tensor of shape 
+  [batch_size, r_seq_len, hidden_size]), this layer computes a new 
+  representation of the query sequences by making them selectively attend to
   different tokens in reference sequences.
  
-  When the query and reference sequences are the same, this ends up being "Self 
-  Attention", i.e. query sequences attend to themselves. 
+  When the query and reference sequence are the same, this layer ends up being 
+  "Self Attention" -- the query sequence attends to itself. 
   """
   def __init__(self, hidden_size, num_heads, dropout_rate):
     """Constructor.
@@ -133,58 +135,90 @@ class Attention(tf.keras.layers.Layer):
         num_heads, self._size_per_head, mode='merge')
     self._dropout_layer = tf.keras.layers.Dropout(dropout_rate)
 
-  def call(self, query, reference, padding_mask, training, cache=None):
-    """Computes new representation of `query` by attending to `reference`.
+    self._attention_weights = None
+
+  def call(self, query_seqs, reference_seqs, token_mask, training, cache=None):
+    """Computes new representation of query sequences.
 
     Args:
-      query: float tensor of shape [batch_size, q_seq_len, hidden_size], query 
-        sequences.
-      reference: float tensor of shape [batch_size, r_seq_len, hidden_size], 
-        reference sequences.
-      padding_mask: float tensor of shape [batch_size, 1, 1, r_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to 
-        mask out padded tokens).
+      query_seqs: float tensor of shape [batch_size, q_seq_len, hidden_size], 
+        query sequences.
+      reference_seqs: float tensor of shape [batch_size, r_seq_len, hidden_size]
+        , reference sequences.
+      token_mask: float tensor of shape [batch_size, num_heads, q_seq_len, 
+        r_seq_len], populated with either 0 (for tokens to keep) or 1 (for 
+        tokens to be masked).
       training: bool scalar, True if in training mode.
-      cache: None, or dict with entries
+      cache: (Optional) dict with entries
         'k': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
           size_per_head],
         'v': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
-          size_per_head].
+          size_per_head],
+        'tgt_tgt_attention': tensor of shape [batch_size * beam_width, 
+          num_heads, tgt_seq_len, tgt_seq_len],
+        'tgt_src_attention': tensor of shape [batch_size * beam_width, 
+          num_heads, tgt_seq_len, src_seq_len].
+        Must be provided in inference mode when called within decoder layers.
 
     Returns:
       outputs: float tensor of shape [batch_size, q_seq_len, hidden_size], the 
-        new representation of `query`.
+        new representation of `query_seqs`.
     """
+    self_attention = True if id(query_seqs) == id(reference_seqs) else False
+    print('self_attention', self_attention, 'query_seqs', query_seqs.shape, 'reference_seqs', reference_seqs.shape)
+    
     # [batch_size, q_seq_len, num_heads, size_per_head]
-    query = self._dense_layer_query(query)
+    query = self._dense_layer_query(query_seqs)
     query *= self._size_per_head ** -0.5 
 
     # [batch_size, r_seq_len, num_heads, size_per_head]
-    key = self._dense_layer_key(reference)
+    key = self._dense_layer_key(reference_seqs)
 
     # [batch_size, r_seq_len, num_heads, size_per_head]
-    value = self._dense_layer_value(reference)
+    value = self._dense_layer_value(reference_seqs)
     
-    if cache is not None:
+    if cache is not None and self_attention:
       # concatenate along the `seq_len` dimension
       cache['k'] = key = tf.concat([cache['k'], key], axis=1)
       cache['v'] = value = tf.concat([cache['v'], value], axis=1)
+    print('q', query.shape, 'k', key.shape, 'v', value.shape)
 
     # [batch_size, num_heads, q_seq_len, r_seq_len]
-    similarities = tf.einsum('NQHS,NRHS->NHQR', query, key)
+    attention_weights = tf.einsum('NQHS,NRHS->NHQR', query, key)
 
     # [batch_size, num_heads, q_seq_len, r_seq_len]
-    similarities += padding_mask * NEG_INF
-
+    attention_weights += token_mask * NEG_INF
+    print('attention_weights', attention_weights.shape)
+    print('token_mask', token_mask.shape)
     # [batch_size, num_heads, q_seq_len, r_seq_len]
-    similarities = tf.nn.softmax(similarities, axis=3)
-    similarities = self._dropout_layer(similarities, training=training)
+    attention_weights = tf.nn.softmax(attention_weights, axis=3)
+    attention_weights = self._dropout_layer(
+        attention_weights, training=training)
 
+    # save attention weights of encoder layers in inference mode
+    if not training and cache is None and self_attention:
+      self._attention_weights = attention_weights 
+
+    # save attention weights for visualization in inference mode
+    if cache is not None:
+      if self_attention:
+        # [batch_size, num_heads, tgt_seq_len, tgt_seq_len]
+        cache['tgt_tgt_attention'] = tf.concat([tf.pad(
+            cache['tgt_tgt_attention'], [[0, 0], [0, 0], [0, 0], [0, 1]]),
+            attention_weights], axis=2)
+        print('tgt_tgt_attention', cache['tgt_tgt_attention'].shape)
+      else:
+        # [batch_size, num_heads, tgt_src_len, src_seq_len]
+        cache['tgt_src_attention'] = tf.concat([
+            cache['tgt_src_attention'], attention_weights], axis=2)
+        print('tgt_src_attention', cache['tgt_src_attention'].shape)
+      
     # [batch_size, q_seq_len, num_heads, size_per_head]
-    outputs = tf.einsum('NHQR,NRHS->NQHS', similarities, value) 
+    outputs = tf.einsum('NHQR,NRHS->NQHS', attention_weights, value) 
 
     # [batch_size, q_seq_len, hidden_size]
     outputs = self._dense_layer_output(outputs) 
+    print()
     return outputs
 
 
@@ -230,14 +264,19 @@ class FeedForwardNetwork(tf.keras.layers.Layer):
 
 
 class EmbeddingLayer(tf.keras.layers.Layer):
-  """The customized layer that operates in "embedding" mode, which converts 
-  token ids to embedding vectors, or "logits" mode, which converts embedding 
-  vectors to logits, reusing the same weight matrix used in "embedding" mode. 
+  """The customized layer that operates in Embedding mode or Logits mode.
 
-  Note that the Encoder only performs one-way conversion (source language token
-  ids to embedding vectors), while the Decoder performs two-way conversion (
-  target language token ids to embedding vector, and embedding vector to logits
-  that precedes the softmax, which reuses the weights). 
+  - Embedding mode converts token ids to embedding vectors.
+    Input: [batch_size(N), seq_len(T)]
+    Weight: [vocab_size(V), hidden_size(D)]
+    Output: [batch_size(N), seq_len(T), hidden_size(D)]
+  
+  - Logits mode converts embedding vectors to logits.
+    Input: [batch_size(N), seq_len(T), hidden_size(D)]
+    Weight: [vocab_size(V), hidden_size(D)]
+    Output: [batch_size(N), seq_len(T), vocab_size(V)]
+
+  Note that Logits mode reuses the same weight matrix in Embedding mode.
   """
   def __init__(self, vocab_size, hidden_size):
     """Constructor.
@@ -280,9 +319,8 @@ class EmbeddingLayer(tf.keras.layers.Layer):
     return outputs
 
   def _get_vocab_embeddings(self):
-    """Returns the embedding matrix ([vocab_size, hidden_size])
-
-    Note the SOS token has a fixed (not trainable) all-zero embedding vector.
+    """Returns the embedding matrix (of shape [vocab_size, hidden_size]). Note 
+    that SOS token (index 0) has a fixed (not trainable) zero embedding vector.
     """
     return tf.pad(self.weights[0][1:], [[1, 0], [0, 0]]) 
 
@@ -365,16 +403,16 @@ class EncoderLayer(tf.keras.layers.Layer):
       inputs: float tensor of shape [batch_size, src_seq_len, hidden_size], the
         input source sequences.
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to
-        mask out padded tokens).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked).
       training: bool scalar, True if in training mode.
 
     Returns:
       outputs: float tensor of shape [batch_size, src_seq_len, hidden_size], the
         output source sequences.
     """
-    query = refernce = self._layernorm_mha(inputs)
-    outputs = self._mha(query, refernce, padding_mask, training)
+    query = reference = self._layernorm_mha(inputs)
+    outputs = self._mha(query, reference, padding_mask, training)
     ffn_inputs = self._dropout_mha(outputs, training=training) + inputs
 
     outputs = self._layernorm_ffn(ffn_inputs)
@@ -430,17 +468,22 @@ class DecoderLayer(tf.keras.layers.Layer):
       encoder_outputs: float tensor of shape [batch_size, src_seq_len, 
         hidden_size], the encoded source sequences to be used as reference.
       look_ahead_mask: float tensor of shape [1, 1, tgt_seq_len, tgt_seq_len], 
-        populated with either 0 (for current or past tokens) or `NEG_INF` (in
-        order to mask out future tokens in target sequences).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to
-        mask out padded tokens in source sequences).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       training: bool scalar, True if in training mode.
-      cache: None, or dict with entries
+      cache: (Optional) dict with entries
         'k': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
           size_per_head],
         'v': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
-          size_per_head]
+          size_per_head],
+        'tgt_tgt_attention': tensor of shape [batch_size * beam_width, 
+          num_heads, tgt_seq_len, tgt_seq_len],
+        'tgt_src_attention': tensor of shape [batch_size * beam_width, 
+          num_heads, tgt_seq_len, src_seq_len].
+        Must be provided in inference mode.
 
     Returns:
       outputs: float tensor of shape [batch_size, tgt_seq_len, hidden_size], the
@@ -454,7 +497,8 @@ class DecoderLayer(tf.keras.layers.Layer):
 
     query, reference = self._layernorm_mha_inter(mha_inter_inputs
         ), encoder_outputs
-    outputs = self._mha_inter(query, reference, padding_mask, training)
+    outputs = self._mha_inter(
+        query, reference, padding_mask, training, cache=cache)
     ffn_inputs = self._dropout_mha_inter(outputs, training=training
         ) + mha_inter_inputs
 
@@ -498,8 +542,8 @@ class Encoder(tf.keras.layers.Layer):
       inputs: float tensor of shape [batch_size, src_seq_len, hidden_size], the
         input source sequences.
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to
-        mask out padded tokens).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       training: bool scalar, True if in training mode.
 
     Returns:
@@ -551,21 +595,26 @@ class Decoder(tf.keras.layers.Layer):
       inputs: float tensor of shape [batch_size, tgt_seq_len, hidden_size], the
         input target sequences.
       encoder_outputs: float tensor of shape [batch_size, src_seq_len, 
-        hidden_size], the encoded source sequences to be used as refernece.
+        hidden_size], the encoded source sequences to be used as reference.
       look_ahead_mask: float tensor of shape [1, 1, tgt_seq_len, tgt_seq_len], 
-        populated with either 0 (for current or past tokens) or `NEG_INF` (in
-        order to mask out future tokens in target sequences).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to
-        mask out padded tokens in source sequences).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       training: bool scalar, True if in training mode.
-      cache: None, or a dict with keys 'layer_0', ... 
+      cache: (Optional) dict with keys 'layer_0', ... 
         'layer_[self.num_layers - 1]', where the value
         associated with each key is a dict with entries
           'k': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
             size_per_head],
           'v': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
-            size_per_head]. 
+            size_per_head],
+          'tgt_tgt_attention': tensor of shape [batch_size * beam_width, 
+            num_heads, tgt_seq_len, tgt_seq_len],
+          'tgt_src_attention': tensor of shape [batch_size * beam_width, 
+            num_heads, tgt_seq_len, src_seq_len]. 
+        Must be provided in inference mode.
 
     Returns:
       outputs: float tensor of shape [batch_size, tgt_seq_len, hidden_size], the
@@ -587,18 +636,20 @@ class TransformerModel(tf.keras.Model):
   """Transformer model as described in https://arxiv.org/abs/1706.03762
 
   The model implements methods `call` and `transduce`, where
-    - `call` takes as input BOTH the source and target token ids, and returns 
-      the estimated logits for the target token ids.
-    - `transduce` takes as input the source token ids ONLY, and outputs the 
-      token ids of the decoded target sequences using beam search. 
+    - `call` is invoked in training mode, taking as input BOTH the source and 
+      target token ids, and returning the estimated logits for the target token 
+      ids.
+    - `transduce` is invoked in inference mode, taking as input the source token 
+      ids ONLY, and outputting the token ids of the decoded target sequences 
+      using beam search. 
   """
   def __init__(self, 
+               vocab_size,
                encoder_stack_size=6, 
                decoder_stack_size=6, 
                hidden_size=512, 
                num_heads=8, 
                filter_size=2048, 
-               vocab_size=33945,
                dropout_rate=0.1,
                extra_decode_length=50,
                beam_width=4,
@@ -606,14 +657,14 @@ class TransformerModel(tf.keras.Model):
     """Constructor.
 
     Args:
+      vocab_size: int scalar, num of subword tokens (including SOS/PAD and EOS) 
+        in the vocabulary. 
       encoder_stack_size: int scalar, num of layers in encoder stack.
       decoder_stack_size: int scalar, num of layers in decoder stack.
       hidden_size: int scalar, the hidden size of continuous representation. 
       num_heads: int scalar, num of attention heads.
       filter_size: int scalar, the depth of the intermediate dense layer of the
         feed-forward sublayer.
-      vocab_size: int scalar, num of subword tokens (including SOS and EOS/PAD) 
-        in the vocabulary. 
       dropout_rate: float scalar, dropout rate for the Dropout layers.
       extra_decode_length: int scalar, the max decode length would be the sum of
         `tgt_seq_len` and `extra_decode_length`.
@@ -622,12 +673,12 @@ class TransformerModel(tf.keras.Model):
         search.
     """
     super(TransformerModel, self).__init__()
+    self._vocab_size = vocab_size
     self._encoder_stack_size = encoder_stack_size
     self._decoder_stack_size = decoder_stack_size
     self._hidden_size = hidden_size
     self._num_heads = num_heads
     self._filter_size = filter_size
-    self._vocab_size = vocab_size
     self._dropout_rate = dropout_rate
     self._extra_decode_length = extra_decode_length
     self._beam_width = beam_width
@@ -642,23 +693,24 @@ class TransformerModel(tf.keras.Model):
     self._encoder_dropout_layer = tf.keras.layers.Dropout(dropout_rate)
     self._decoder_dropout_layer = tf.keras.layers.Dropout(dropout_rate)
 
-  def call(self, src_token_ids, tgt_token_ids, training=False):
+  def call(self, src_token_ids, tgt_token_ids):
     """Takes as input the source and target token ids, and returns the estimated
-    logits for the target sequences.
+    logits for the target sequences. Note this function should be called in 
+    training mode only.
 
     Args:
       src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids
         of source sequences.
       tgt_token_ids: int tensor of shape [batch_size, tgt_seq_len], token ids 
-        of target sequences
-      training: bool scalar, True if in training mode (i.e. dropout is on).
+        of target sequences.
 
     Returns:
       logits: float tensor of shape [batch_size, tgt_seq_len, vocab_size]. 
     """
     padding_mask = utils.get_padding_mask(src_token_ids)
-    encoder_outputs = self._encode(src_token_ids, padding_mask, training)
-    logits = self._decode(tgt_token_ids, encoder_outputs, padding_mask, training)
+    encoder_outputs = self._encode(src_token_ids, padding_mask, training=True)
+    logits = self._decode(
+        tgt_token_ids, encoder_outputs, padding_mask)
     return logits
 
   def _encode(self, src_token_ids, padding_mask, training=False):
@@ -669,23 +721,23 @@ class TransformerModel(tf.keras.Model):
       src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids
         of source sequences.
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (for padded
-        tokens).
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
       training: bool scalar, True if in training mode.
 
     Returns:
       encoder_outputs: float tensor of shape [batch_size, src_seq_len, 
-        hidden_size], the encoded source sequences to be used as refernece. 
+        hidden_size], the encoded source sequences to be used as reference. 
     """
+    src_seq_len = tf.shape(src_token_ids)[1]
+
     # [batch_size, src_seq_len, hidden_size]
     src_token_embeddings = self._embedding_logits_layer(
         src_token_ids, 'embedding')
-    src_seq_len = tf.shape(src_token_ids)[1]
 
     # [src_seq_len, hidden_size]
     positional_encoding = utils.get_positional_encoding(
         src_seq_len, self._hidden_size)
-
     src_token_embeddings += positional_encoding
     src_token_embeddings = self._encoder_dropout_layer(
         src_token_embeddings, training)
@@ -694,19 +746,18 @@ class TransformerModel(tf.keras.Model):
         src_token_embeddings, padding_mask, training)
     return encoder_outputs
 
-  def _decode(
-      self, tgt_token_ids, encoder_outputs, padding_mask, training=False):
+  def _decode(self, tgt_token_ids, encoder_outputs, padding_mask):
     """Compute the estimated logits of target token ids, based on the encoded 
-    source sequences.
+    source sequences. Note this function should be called in training mode only.
 
     Args:
-      tgt_token_ids: int tensor of shape [batch_size, tgt_seq_len] in training 
-        mode, token ids of target sequences; or None in inference mode.
+      tgt_token_ids: int tensor of shape [batch_size, tgt_seq_len] token ids of 
+        target sequences.
       encoder_outputs: float tensor of shape [batch_size, src_seq_len, 
-        hidden_size], the encoded source sequences to be used as refernece. 
+        hidden_size], the encoded source sequences to be used as reference. 
       padding_mask: float tensor of shape [batch_size, 1, 1, src_seq_len], 
-        populated with either 0 (for regular tokens) or `NEG_INF` (in order to
-        mask out padded tokens in source sequences).      
+        populated with either 0 (for tokens to keep) or 1 (for tokens to be 
+        masked). 
 
     Returns:
       logits: float tensor of shape [batch_size, tgt_seq_len, vocab_size].
@@ -717,11 +768,12 @@ class TransformerModel(tf.keras.Model):
     tgt_token_embeddings = self._embedding_logits_layer(
         tgt_token_ids, 'embedding')
 
+    # [tgt_seq_len, hidden_size]
     positional_encoding = utils.get_positional_encoding(
         tgt_seq_len, self._hidden_size)
     tgt_token_embeddings += positional_encoding
     tgt_token_embeddings = self._decoder_dropout_layer(
-        tgt_token_embeddings, training) 
+        tgt_token_embeddings, training=True) 
 
     look_ahead_mask = utils.get_look_ahead_mask(tgt_seq_len)
 
@@ -729,14 +781,15 @@ class TransformerModel(tf.keras.Model):
                                     encoder_outputs, 
                                     look_ahead_mask, 
                                     padding_mask, 
-                                    training)
+                                    training=True)
 
     logits = self._embedding_logits_layer(decoder_outputs, 'logits')
     return logits
 
   def transduce(self, src_token_ids):
     """Takes as input the source token ids only, and outputs the token ids of 
-    the decoded target sequences using beam search.
+    the decoded target sequences using beam search. Note this function should be 
+    called in inference mode only.
 
     Args:
       src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids
@@ -747,6 +800,12 @@ class TransformerModel(tf.keras.Model):
         ids of the decoded target sequences using beam search.
       scores: float tensor of shape [batch_size], the scores (length-normalized 
         log-probs) of the decoded target sequences.
+      tgt_tgt_attention: float tensor of shape [decoder_stack_size, batch_size, 
+        num_heads, tgt_seq_len, tgt_seq_len], target-to-target attn. weights.
+      tgt_src_attention: float tensor of shape [decoder_stack_size, batch_size, 
+        num_heads, tgt_seq_len, src_seq_len], target-to-source attn. weights.
+      src_src_attention: float tensor of shape [encoder_stack_size, batch_size, 
+        num_heads, src_seq_len, src_seq_len], source-to-source attn. weights.
     """
     batch_size, src_seq_len = tf.unstack(tf.shape(src_token_ids))
     max_decode_length = src_seq_len + self._extra_decode_length
@@ -761,16 +820,24 @@ class TransformerModel(tf.keras.Model):
                                 self._beam_width, 
                                 self._alpha, 
                                 max_decode_length, 
-                                EOS_ID)
-    decoded_ids, scores = bs.search(sos_ids, decoding_cache)
+                                EOS_ID,
+                                self._decoder._stack_size)
+    decoded_ids, scores, tgt_tgt_attention, tgt_src_attention = bs.search(
+        sos_ids, decoding_cache)
 
     decoded_ids = decoded_ids[:, 0, 1:]
     scores = scores[:, 0] 
-    return decoded_ids, scores 
+
+    src_src_attention = [
+        self._encoder._stack[i]._mha._attention_weights
+        for i in range(self._encoder._stack_size)]
+
+    return (decoded_ids, scores, 
+            tgt_tgt_attention, tgt_src_attention, src_src_attention)
 
   def _build_decoding_cache(self, src_token_ids, batch_size):
     """Builds a dictionary that caches previously computed key and value feature
-    maps of the growing decoded sequence.
+    maps and attention weights of the growing decoded sequence.
 
     Args:
       src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids of 
@@ -779,18 +846,23 @@ class TransformerModel(tf.keras.Model):
 
     Returns:
       decoding_cache: dict of entries
-          'encoder_outputs': tensor of shape [batch_size, src_seq_len, 
-            hidden_size],
-          'padding_mask': tensor of shape [batch_size, 1, 1, src_seq_len],
+        'encoder_outputs': tensor of shape [batch_size, src_seq_len, 
+          hidden_size],
+        'padding_mask': tensor of shape [batch_size, 1, 1, src_seq_len],
 
-          and entries with keys 'layer_0',...,'layer_[decoder_num_layers - 1]'
-          where the value associated with key 'layer_*' is a dict with entries
-            'k': tensor of shape [batch_size, 0, num_heads, size_per_head],
-            'v': tensor of shape [batch_size, 0, num_heads, size_per_head].
+        and entries with keys 'layer_0',...,'layer_[decoder_num_layers - 1]'
+        where the value associated with key 'layer_*' is a dict with entries
+          'k': tensor of shape [batch_size, 0, num_heads, size_per_head],
+          'v': tensor of shape [batch_size, 0, num_heads, size_per_head],
+          'tgt_tgt_attention': tensor of shape [batch_size, num_heads, 
+            0, 0],
+          'tgt_src_attention': tensor of shape [batch_size, num_heads,
+            0, src_seq_len].
     """
     padding_mask = utils.get_padding_mask(src_token_ids)
     encoder_outputs = self._encode(src_token_ids, padding_mask, training=False)
     size_per_head = self._hidden_size // self._num_heads
+    src_seq_len = padding_mask.shape[-1] 
 
     decoding_cache = {'layer_%d' % layer:
         {'k':
@@ -800,15 +872,22 @@ class TransformerModel(tf.keras.Model):
          'v':
             tf.zeros([
                 batch_size, 0, self._num_heads, size_per_head
-            ], 'float32')
+            ], 'float32'),
+         'tgt_tgt_attention':
+            tf.zeros([
+                batch_size, self._num_heads, 0, 0], 'float32'), 
+         'tgt_src_attention':
+            tf.zeros([
+                batch_size, self._num_heads, 0, src_seq_len], 'float32')
+
         } for layer in range(self._decoder._stack_size)
     }
-    decoding_cache["encoder_outputs"] = encoder_outputs
-    decoding_cache["padding_mask"] = padding_mask
+    decoding_cache['encoder_outputs'] = encoder_outputs
+    decoding_cache['padding_mask'] = padding_mask
     return decoding_cache
 
   def _build_decoding_fn(self, max_decode_length):
-    """Builds the decoding function that computs the decoded sequences using
+    """Builds the decoding function that computes the decoded sequences using
     beam search.
 
     Args:
@@ -819,9 +898,10 @@ class TransformerModel(tf.keras.Model):
       decoding_fn: a callable that outputs the logits of the next decoded token
         ids.
     """
+    # [max_decode_length, hidden_size]
     timing_signal = utils.get_positional_encoding(
         max_decode_length, self._hidden_size)
-    timing_signal = tf.cast(timing_signal, 'float32') 
+    timing_signal = tf.cast(timing_signal, 'float32')
 
     def decoding_fn(decoder_input, i, cache):
       """Computes the logits of the next decoded token ids.
@@ -842,20 +922,30 @@ class TransformerModel(tf.keras.Model):
             'k': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
               size_per_head],
             'v': tensor of shape [batch_size * beam_width, seq_len, num_heads, 
-              size_per_head].
+              size_per_head],
+            'tgt_tgt_attention': tensor of shape [batch_size * beam_width, 
+              num_heads, seq_len, seq_len],
+            'tgt_src_attention': tensor of shape [batch_size * beam_width, 
+              num_heads, seq_len, src_seq_len].
+            Note `src_len` is the running length of the growing decode sequence.
 
       Returns:
         logits: float tensor of shape [batch_size * beam_size, vocab_size].
         cache: a dict with the same structure as the input `cache`, except that
-          the shapes of the values of key `k` and `v` are
-          [batch_size * beam_width, seq_len + 1, num_heads, size_per_head].
+          the shapes of the values of key `k`, `v`, `tgt_tgt_attention`, 
+          `tgt_src_attention` are
+          [batch_size * beam_width, seq_len + 1, num_heads, size_per_head],
+          [batch_size * beam_width, seq_len + 1, num_heads, size_per_head],
+          [batch_size * beam_width, num_heads, seq_len + 1, seq_len + 1],
+          [batch_size * beam_width, num_heads, seq_len + 1, src_seq_len].
       """
       decoder_input = self._embedding_logits_layer(decoder_input, 'embedding')
       decoder_input += timing_signal[i:i + 1]
 
       decoder_outputs = self._decoder(decoder_input,
                                       cache['encoder_outputs'],
-                                      tf.zeros((1, i + 1), dtype='float32'),
+                                      tf.zeros((1, 1, 1, i + 1), 
+                                          dtype='float32'),
                                       cache['padding_mask'],
                                       training=False,
                                       cache=cache)
