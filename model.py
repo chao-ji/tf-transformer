@@ -165,7 +165,6 @@ class Attention(tf.keras.layers.Layer):
         new representation of `query_seqs`.
     """
     self_attention = True if id(query_seqs) == id(reference_seqs) else False
-    print('self_attention', self_attention, 'query_seqs', query_seqs.shape, 'reference_seqs', reference_seqs.shape)
     
     # [batch_size, q_seq_len, num_heads, size_per_head]
     query = self._dense_layer_query(query_seqs)
@@ -181,15 +180,12 @@ class Attention(tf.keras.layers.Layer):
       # concatenate along the `seq_len` dimension
       cache['k'] = key = tf.concat([cache['k'], key], axis=1)
       cache['v'] = value = tf.concat([cache['v'], value], axis=1)
-    print('q', query.shape, 'k', key.shape, 'v', value.shape)
 
     # [batch_size, num_heads, q_seq_len, r_seq_len]
     attention_weights = tf.einsum('NQHS,NRHS->NHQR', query, key)
 
     # [batch_size, num_heads, q_seq_len, r_seq_len]
     attention_weights += token_mask * NEG_INF
-    print('attention_weights', attention_weights.shape)
-    print('token_mask', token_mask.shape)
     # [batch_size, num_heads, q_seq_len, r_seq_len]
     attention_weights = tf.nn.softmax(attention_weights, axis=3)
     attention_weights = self._dropout_layer(
@@ -206,19 +202,16 @@ class Attention(tf.keras.layers.Layer):
         cache['tgt_tgt_attention'] = tf.concat([tf.pad(
             cache['tgt_tgt_attention'], [[0, 0], [0, 0], [0, 0], [0, 1]]),
             attention_weights], axis=2)
-        print('tgt_tgt_attention', cache['tgt_tgt_attention'].shape)
       else:
         # [batch_size, num_heads, tgt_src_len, src_seq_len]
         cache['tgt_src_attention'] = tf.concat([
             cache['tgt_src_attention'], attention_weights], axis=2)
-        print('tgt_src_attention', cache['tgt_src_attention'].shape)
       
     # [batch_size, q_seq_len, num_heads, size_per_head]
     outputs = tf.einsum('NHQR,NRHS->NQHS', attention_weights, value) 
 
     # [batch_size, q_seq_len, hidden_size]
     outputs = self._dense_layer_output(outputs) 
-    print()
     return outputs
 
 
