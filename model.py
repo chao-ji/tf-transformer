@@ -707,8 +707,8 @@ class TransformerModel(tf.keras.Model):
     return logits
 
   def _encode(self, src_token_ids, padding_mask, training=False):
-    """Convert source sequences token ids into continuous representation, and 
-    compute the Encoder-encoded sequences.
+    """Converts source sequences token ids into continuous representation, and 
+    computes the Encoder-encoded sequences.
 
     Args:
       src_token_ids: int tensor of shape [batch_size, src_seq_len], token ids
@@ -740,7 +740,7 @@ class TransformerModel(tf.keras.Model):
     return encoder_outputs
 
   def _decode(self, tgt_token_ids, encoder_outputs, padding_mask):
-    """Compute the estimated logits of target token ids, based on the encoded 
+    """Computes the estimated logits of target token ids, based on the encoded 
     source sequences. Note this function should be called in training mode only.
 
     Args:
@@ -900,7 +900,7 @@ class TransformerModel(tf.keras.Model):
       """Computes the logits of the next decoded token ids.
 
       Args:
-        decoder_input: int tensor of shape [batch_size * beam_size, 1], the 
+        decoder_input: int tensor of shape [batch_size * beam_width, 1], the 
           decoded tokens at index `i`.
         i: int scalar tensor, the index of the `decoder_input` in the decoded
           sequence. 
@@ -923,7 +923,7 @@ class TransformerModel(tf.keras.Model):
             Note `src_len` is the running length of the growing decode sequence.
 
       Returns:
-        logits: float tensor of shape [batch_size * beam_size, vocab_size].
+        logits: float tensor of shape [batch_size * beam_width, vocab_size].
         cache: a dict with the same structure as the input `cache`, except that
           the shapes of the values of key `k`, `v`, `tgt_tgt_attention`, 
           `tgt_src_attention` are
@@ -932,6 +932,7 @@ class TransformerModel(tf.keras.Model):
           [batch_size * beam_width, num_heads, seq_len + 1, seq_len + 1],
           [batch_size * beam_width, num_heads, seq_len + 1, src_seq_len].
       """
+      # [batch_size * beam_width, 1, hidden_size]
       decoder_input = self._embedding_logits_layer(decoder_input, 'embedding')
       decoder_input += timing_signal[i:i + 1]
 
