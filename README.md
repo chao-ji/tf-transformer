@@ -8,7 +8,7 @@ Transformer is a novel yet simple network architecture for sequence modeling. Un
 At the core of the Transformer model is the *self-attention* mechanism used by the *encoder*, where we encode a sequence of symbols by making each symbol *attend* to other symbols in the same sequence. Specifically, each symbol `s` (embedding vector of a word or subword token) is first transformed into three vectors, namely the `query`, the `key`, and the `value`. Then a new representation of the symbol `s` is computed as the average of the `value` vectors across each and every symbol `t` in the sequence, weighted by the similarity between the `query` of `s` and the `key` of `t`. Because the similarity is simply computed as the dot product, one can flexibly model the dependence between any two symbols, regardless of their distance in the sequence.
 
 <p align="center ">
-  <img src="g3doc/images/attention.png" width="600">
+  <img src="g3doc/images/teaser.png" width="600">
 
   <br>
   Computing the pairwise token-to-token similarity matrix by dot product
@@ -97,6 +97,46 @@ For more detailed usage info, run
 ```bash
 python run_evaluator.py --help
 ```
+
+
+## Attention Weights
+**input source sequences**
+
+```
+It is in this spirit that a majority of American governments have passed new laws since 2009 making the registration or voting process more difficult.
+Google's free service instantly translates words, phrases, and web pages between English and over 100 other languages.
+What you said is completely absurd.
+```
+
+**output target sequences**
+```
+In diesem Sinne haben die meisten amerikanischen Regierungen seit 2009 neue Gesetze verabschiedet, die die Registrierung oder das Abstimmungsverfahren schwieriger machen.
+Der kostenlose Service von Google übersetzt Wörter, Phrasen und Webseiten zwischen Englisch und über 100 anderen Sprachen.
+Was Sie gesagt haben, ist völlig absurd.
+```
+
+
+<p align="center ">
+  <img src="g3doc/images/src_src.png" width="600">
+  <br>
+  Source-to-Source attention weights 
+</p>
+
+
+<p align="center ">
+  <img src="g3doc/images/tgt_src.png" width="600">
+  <br>
+  Source-to-Source attention weights
+</p>
+
+
+<p align="center ">
+  <img src="g3doc/images/tgt_tgt.png" width="600">
+  <br>
+  Source-to-Source attention weights
+</p>
+
+
 
 
 
