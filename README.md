@@ -100,7 +100,7 @@ python run_evaluator.py --help
 
 
 ## Attention Weights
-**input source sequences**
+**Input sentences in source langauge**
 
 ```
 It is in this spirit that a majority of American governments have passed new laws since 2009 making the registration or voting process more difficult.
@@ -108,7 +108,7 @@ Google's free service instantly translates words, phrases, and web pages between
 What you said is completely absurd.
 ```
 
-**output target sequences**
+**Translated sentences in target language**
 ```
 In diesem Sinne haben die meisten amerikanischen Regierungen seit 2009 neue Gesetze verabschiedet, die die Registrierung oder das Abstimmungsverfahren schwieriger machen.
 Der kostenlose Service von Google übersetzt Wörter, Phrasen und Webseiten zwischen Englisch und über 100 anderen Sprachen.
