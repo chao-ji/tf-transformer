@@ -126,14 +126,14 @@ Was Sie gesagt haben, ist völlig absurd.
 <p align="center ">
   <img src="g3doc/images/tgt_src.png" width="600">
   <br>
-  Source-to-Source attention weights
+  Target-to-Source attention weights
 </p>
 
 
 <p align="center ">
   <img src="g3doc/images/tgt_tgt.png" width="600">
   <br>
-  Source-to-Source attention weights
+  Target-to-Target attention weights
 </p>
 
 
