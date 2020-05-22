@@ -880,8 +880,7 @@ class TransformerModel(tf.keras.Model):
     return decoding_cache
 
   def _build_decoding_fn(self, max_decode_length):
-    """Builds the decoding function that computes the decoded sequences using
-    beam search.
+    """Builds the decoding function that will be called in beam search.
 
     Args:
       max_decode_length: int scalar, the decoded sequences would not exceed
