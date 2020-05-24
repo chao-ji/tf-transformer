@@ -110,6 +110,12 @@ class BeamSearch(object):
         decode_seq_len], the finished decoded sequences over all beams.
       finished_scores: float tensor of shape [batch_size, beam_width], the 
         scores of finished decoded sequences over all beams.
+      tgt_tgt_attention: a list of `decoder_stack_size` float tensor of shape 
+        [batch_size, num_heads, tgt_seq_len, tgt_seq_len], target-to-target 
+        attention weights.
+      tgt_src_attention: a list of `decoder_stack_size` float tensor of shape 
+        [batch_size, num_heads, tgt_seq_len, src_seq_len], target-to-source 
+        attention weights.
     """
     state, state_shapes = self._create_initial_state(initial_ids, initial_cache)
 
@@ -127,14 +133,15 @@ class BeamSearch(object):
     active_cache = finished_state[ACTIVE_CACHE]
 
     finished_cond = tf.reduce_any(finished_flags, 1)
-
     # if none of the beams end with finished seqs, we return the remaining 
     # active seqs.
+    # [batch_size, beam_width, decode_seq_len]
     finished_seqs = tf.where(finished_cond[:, tf.newaxis, tf.newaxis], 
         finished_seqs, active_seqs)
+    # [batch_size, beam_width]
     finished_scores = tf.where(finished_cond[:, tf.newaxis], 
         finished_scores, active_log_probs)
-
+  
     tgt_tgt_attention = [
         active_cache['layer_%d' % i]['tgt_tgt_attention'].numpy()[:, 0] 
         for i in range(self._decoder_stack_size)]

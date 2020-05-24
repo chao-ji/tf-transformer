@@ -1,8 +1,8 @@
-"""Defines Transformer dataset builder.
-"""
+"""Defines Transformer dataset builder."""
 import os
 
 import tensorflow as tf
+
 
 # Buffer size for reading TFRecord files. Should be generally larger than the 
 # actual size (in bytes) of each TFRecord file.
@@ -16,12 +16,13 @@ _BOUNDARY_SCALE = 1.1
 
 
 class TransformerDatasetBuilder(object):
-  """Builds a tf.data.Dataset instance that reads and batches source and target 
-  token ids from pre-generated TFRecord files.
+  """Builds a tf.data.Dataset instance that reads, zero-pads and batches source 
+  and target token ids from pre-generated TFRecord files.
 
-  Note: The produced dataset adopts the dynamic batching scheme (unlike the more 
+  Note: The produced dataset adopts the dynamic batching scheme (unlike the more
   common static batching) -- the `batch_size` (num of seqs in a batch) may vary 
-  across different batches as long as `batch_size*seq_len` <= `max_num_tokens`.
+  across different batches as long as `batch_size * src_seq_len` or `batch_size
+  * tgt_seq_len` <= `max_num_tokens`.
   """
   def __init__(self, 
                max_num_tokens, 
@@ -32,7 +33,8 @@ class TransformerDatasetBuilder(object):
     """Constructor.
 
     Args:
-      max_num_tokens: int scalar, the maximum num of tokens in each batch. 
+      max_num_tokens: int scalar, the maximum num of tokens in source or target 
+        sequences in each batch. 
       shuffle: bool scalar, if False, the training examples will be generated
         deterministically. 
       max_length: int scalar, source or target seqs longer than this will be
@@ -54,17 +56,18 @@ class TransformerDatasetBuilder(object):
       filenames: a list of strings, names of TFRecord files. 
 
     Returns:
-      dataset: a tf.data.Dataset instance, each item is a tuple of tensors
+      dataset: a tf.data.Dataset instance, each item is a tuple of two tensors
         of shape [batch_size, src_seq_len] and [batch_size, tgt_seq_len], 
         holding the token ids in source or target sequences. Each row is 
         zero-padded to the length of the longest sequence in each batch, so
-        the last column contains at least one non-zero (padding) token.
+        the last column contains at least one non-zero (padded) token.
     """
     # shape: ()
     dataset = tf.data.Dataset.from_tensor_slices(filenames).shuffle(
         len(filenames), seed=self._random_seed) 
 
     # set `options.experimental_deterministic` to False to shuffle the dataset 
+    # shape: ()
     options = tf.data.Options()
     options.experimental_deterministic = False if self._shuffle else True
     dataset = dataset.interleave(
@@ -75,7 +78,7 @@ class TransformerDatasetBuilder(object):
 
     # shape: ((None,), (None,))
     dataset = dataset.map(
-        _parse_example, num_parallel_calls=self._num_parallel_calls) 
+        _parse_example, num_parallel_calls=self._num_parallel_calls)
 
     # filter out long sequences
     dataset = dataset.filter(lambda x, y: tf.logical_and(
@@ -88,9 +91,18 @@ class TransformerDatasetBuilder(object):
     return dataset
 
   def _batch_examples(self, dataset):
-    """Batches the sequence pairs using dynamic batching scheme."""
+    """Batches the sequence pairs using dynamic batching scheme.
+
+    Args:
+      dataset: a tf.data.Dataset instance, each item is a tuple of two int 
+        tensors of shape [src_seq_len] and [tgt_seq_len].
+
+    Returns:
+      a tf.data.Dataset instance, each item is a tuple of two int tensors of 
+        shape [batch_size, src_seq_len] and [batch_size, tgt_seq_len].
+    """
     buckets_min, buckets_max = self._create_bucket_bounds()
-    bucket_batch_sizes = tf.constant([self._max_num_tokens // seq_len 
+    bucket_batch_sizes = tf.constant([self._max_num_tokens // (seq_len - 1)
         for seq_len in buckets_max], dtype='int64')
 
     # mapper
@@ -113,15 +125,15 @@ class TransformerDatasetBuilder(object):
       bucket_id = tf.where(flags)[0, 0]
       return bucket_id
 
-    def window_size_fn(bucket_id):
-      """Maps key to window size."""
-      return bucket_batch_sizes[bucket_id]
-
     # reducer
     def batching_fn(bucket_id, grouped_dataset):
       """Maps key and dataset to dataset"""
       bucket_batch_size = window_size_fn(bucket_id)
       return grouped_dataset.padded_batch(bucket_batch_size, ([None], [None]))
+
+    def window_size_fn(bucket_id):
+      """Maps key to window size."""
+      return bucket_batch_sizes[bucket_id]
 
     return dataset.apply(tf.data.experimental.group_by_window(
         key_func=example_to_bucket_id,

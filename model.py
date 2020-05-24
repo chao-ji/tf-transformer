@@ -793,12 +793,15 @@ class TransformerModel(tf.keras.Model):
         ids of the decoded target sequences using beam search.
       scores: float tensor of shape [batch_size], the scores (length-normalized 
         log-probs) of the decoded target sequences.
-      tgt_tgt_attention: float tensor of shape [decoder_stack_size, batch_size, 
-        num_heads, tgt_seq_len, tgt_seq_len], target-to-target attn. weights.
-      tgt_src_attention: float tensor of shape [decoder_stack_size, batch_size, 
-        num_heads, tgt_seq_len, src_seq_len], target-to-source attn. weights.
-      src_src_attention: float tensor of shape [encoder_stack_size, batch_size, 
-        num_heads, src_seq_len, src_seq_len], source-to-source attn. weights.
+      tgt_tgt_attention: a list of `decoder_stack_size` float tensor of shape 
+        [batch_size, num_heads, tgt_seq_len, tgt_seq_len], target-to-target 
+        attention weights.
+      tgt_src_attention: a list of `decoder_stack_size` float tensor of shape 
+        [batch_size, num_heads, tgt_seq_len, src_seq_len], target-to-source 
+        attention weights.
+      src_src_attention: a list of `encoder_stack_size` float tensor of shape 
+        [batch_size, num_heads, src_seq_len, src_seq_len], source-to-source 
+        attention weights.
     """
     batch_size, src_seq_len = tf.unstack(tf.shape(src_token_ids))
     max_decode_length = src_seq_len + self._extra_decode_length
