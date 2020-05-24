@@ -30,7 +30,7 @@ git clone git@github.com:chao-ji/tf-transformer.git
 
 ## Data Preparation
 
-The training corpus should be in the form of a list of text file(s) in source language, paired with a list of text file(s) in target language, where in each file the sequences are separated by `\n`s:
+The training corpus should be in the form of a list of text file(s) in source language, paired with a list of text file(s) in target language, where the lines (i.e. sentences) in source language text files have one-to-one correspondence to lines in target language text files 
 
 ```
 source_file_1.txt   target_file_1.txt
@@ -40,7 +40,7 @@ source_file_n.txt   target_file_n.txt
 
 ```
 
-You need to convert raw text files into TFRecord files, by running
+First you need to convert raw text files into TFRecord files, by running
 ```bash
 python data/tfrecord.py \
   --source_filenames=source_file_1.txt,source_file_2.txt,...,source_file_2.txt \
@@ -48,7 +48,7 @@ python data/tfrecord.py \
   --output_dir=/path/to/tfrecord/directory \
   --vocab_name=vocab
 ```
-Note: this process involves "learning" a vocabulary of subword tokens from the training parallel corpus, which is saved to files `vocab.subtokens` and `vocab.alphabet`. The vocabulary will be later used to encode raw text string into subword token ids, or decode them back to raw text string.
+Note: this process involves "learning" a vocabulary of subword tokens from the training corpus, which is saved to files `vocab.subtokens` and `vocab.alphabet`. The vocabulary will be later used to encode raw text string into subword token ids, or decode them back to raw text string.
 
 For detailed usage info, run
 ```bash
@@ -76,7 +76,7 @@ python run_trainer.py --help
 
 ## Evaluation
 
-The evaluation involves decoding an input source sequence into the output target sequence using Beam Search, and compute the BLEU score against the groundtruth target sequence.
+The evaluation involves translating a source sequence into the target sequence, and computing the BLEU score between predicted and groundtruth target sequence.
 
 To evaluate a pretrained model, run
 
@@ -155,7 +155,7 @@ Notice the attention weight from `uebersetz` (target) to `translat` (source), fr
   Target-to-Target attention weights.
 </p>
 
-Notice the attention paid to `Was` by `Was`, `Sie_`, `gesagt`, `haben_` -- as the decoder spits out these subtokens, it needs to "be aware" of the scope of the clause `Was Sie gesagt haben` (what you've said).
+Notice the attention paid to `Was` by `Was`, `Sie_`, `gesagt`, `haben_` -- as the decoder spits out these subtokens, it needs to "be aware" of the scope of the clause `Was Sie gesagt haben` (meaning "what you've said").
 
 ## Reference
 * [TensorFlow official implementation of Transformer](https://github.com/tensorflow/models/tree/master/official/nlp/transformer)
