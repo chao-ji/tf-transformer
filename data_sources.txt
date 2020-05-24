@@ -1,0 +1,5 @@
+Below are the sample data (parallel corpus) that can be used from training and evaluation.
+
+http://data.statmt.org/wmt17/translation-task/training-parallel-nc-v12.tgz
+http://www.statmt.org/wmt13/training-parallel-commoncrawl.tgz
+http://www.statmt.org/wmt13/training-parallel-europarl-v7.tgz

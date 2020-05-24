@@ -55,6 +55,8 @@ For detailed usage info, run
 python data/tfrecord.py --help
 ``` 
 
+For sample data, refer to [data\_sources.txt](data_sources.txt)
+
 ## Training
 
 To train a model, run
