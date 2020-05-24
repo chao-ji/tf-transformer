@@ -1,9 +1,11 @@
-"""Defines Trainer, Evaluator and Inferencer classes of Transformer model.
+"""Defines Trainer and Evaluator class that wraps a Transformer model and 
+performs training and evaluation, respectively.
 """
 import math
 import os
 import pickle
 
+import numpy as np
 import tensorflow as tf
 from nltk.translate.bleu_score import corpus_bleu
 
@@ -58,8 +60,26 @@ class TransformerTrainer(object):
 
     @tf.function(input_signature=train_step_signature)
     def train_step(src_token_ids, tgt_token_ids):
+      """Performs a single training step on a minibatch of source and target
+      token ids.
+
+      Args:
+        src_token_ids: int tensor of shape [batch_size, src_seq_len], lists of
+          subtoken ids of batched source sequences ending with EOS_ID and 
+          zero-padded.
+        tgt_token_ids: int tensor of shape [batch_size, src_seq_len], lists of
+          subtoken ids of batched target sequences ending with EOS_ID and 
+          zero-padded.
+
+      Returns:
+        loss: float scalar tensor, the loss.
+        step: int scalar tensor, the global step.
+        lr: float scalar tensor, the learning rate.
+      """
       with tf.GradientTape() as tape:
-        # pad `tgt_token_ids` with zeros as `SOS_ID`s
+        # for each sequence of subtokens s1, s2, ..., sn, 1
+        # prepend it with 0 (SOS_ID) and truncate it to the same length:
+        # 0, s1, s2, ..., sn
         tgt_token_ids_input = tf.pad(tgt_token_ids, [[0, 0], [1, 0]])[:, :-1]
         logits = self._model(src_token_ids, tgt_token_ids_input, training=True)
         loss = utils.compute_loss(tgt_token_ids, 
@@ -114,22 +134,23 @@ class TransformerEvaluator(object):
       decode_max_length: int scalar, max length of decoded sequence.
     """
     self._model = model
-    self._decode_batch_size = decode_batch_size
     self._subtokenizer = subtokenizer
+    self._decode_batch_size = decode_batch_size
     self._decode_max_length = decode_max_length
-
     self._bleu_tokenizer = tokenization.BleuTokenizer()
 
-  def translate(self,
-                source_text_filename,
-                output_filename=None):
-    """Translate the source sequences.
+  def translate(self, source_text_filename, output_filename=None):
+    """Translates the source sequences.
 
     Args:
       source_text_filename: string scalar, name of the text file storing source 
         sequences, lines separated by '\n'.
-      output_filename: (Optional) name of the file that translations will be 
-        written to.
+      output_filename: (Optional) string scalar, name of the file that 
+        translations will be written to.
+
+    Returns:
+      translations: a list of strings, the translated sequences.
+      sorted_indices: a list of ints, used to reorder the translated sequences.
     """
     sorted_lines, sorted_indices = _get_sorted_lines(source_text_filename)
 
@@ -138,7 +159,8 @@ class TransformerEvaluator(object):
     num_decode_batches = math.ceil(total_samples / batch_size)
 
     def input_generator():
-      # generate batched source sequences of token ids of shape 
+      # encodes each line into a list of subtoken ids (ending with EOS_ID) and 
+      # zero-pads to length `decode_max_length`, and finally batches to shape
       # [batch_size, decode_max_length]
       for i in range(num_decode_batches):
         lines = [sorted_lines[j + i * batch_size]
@@ -154,16 +176,26 @@ class TransformerEvaluator(object):
 
     translations = []
     for i, source_ids in enumerate(input_generator()):
-      # transduce `source_ids` into `translated_ids`, trim token ids at and 
-      # beyond EOS, and decode ids into text
-      translated_ids, _ = self._model.transduce(source_ids)
+      # transduces `source_ids` into `translated_ids`, trims token ids at and 
+      # beyond EOS, and decode token ids back to text
+      (translated_ids, 
+       _, 
+       tgt_tgt_attention, 
+       tgt_src_attention, 
+       src_src_attention) = self._model.transduce(source_ids)
       translated_ids = translated_ids.numpy()
-      length = len(translated_ids)
+      length = translated_ids.shape[0]
+
+      utils.save_attention_weights('attention_%04d' % i, { 
+          'src': source_ids, 
+          'tgt': translated_ids, 
+          'tgt_tgt_attention': tgt_tgt_attention[-1], 
+          'tgt_src_attention': tgt_src_attention[-1], 
+          'src_src_attention': src_src_attention[-1]})
 
       for j in range(length):
-        if j + i * batch_size < total_samples:
-          translation = self._trim_and_decode(translated_ids[j])
-          translations.append(translation)
+        translation = self._trim_and_decode(translated_ids[j])
+        translations.append(translation)
 
     # optionally write translations to a text file
     if output_filename is not None:
@@ -172,27 +204,32 @@ class TransformerEvaluator(object):
 
   def evaluate(self,
                source_text_filename, 
-               target_text_filename=None, 
+               target_text_filename, 
                output_filename=None):
-    """Translate the source sequences and compute the BLEU score of the 
+    """Translates the source sequences and computes the BLEU score of the 
     translations against groundtruth target sequences.
 
     Args:
       source_text_filename: string scalar, name of the text file storing source 
         sequences, lines separated by '\n'.
-      target_text_filename: string scalar, name of the text file storing target
-        sequences, lines separated by '\n'.
+      target_text_filename: (Optional) string scalar, name of the text file 
+        storing target sequences, lines separated by '\n'.
       output_filename: (Optional) name of the file that translations will be 
         written to.
+
+    Returns:
+      case_insensitive_score: float scalar, BLEU score when all chars are 
+        lowercased.
+      case_sensitive_score: float scalar, BLEU score when all chars are in 
+        original case.
     """
     translations, sorted_indices = self.translate(
         source_text_filename, output_filename)
 
-    if target_text_filename is None:
-      return None, None
-
     targets = tf.io.gfile.GFile(
         target_text_filename).read().strip().splitlines()
+
+    # reorder translations to their original positions in the input file
     translations = [translations[i] for i in sorted_indices]
 
     # compute BLEU score if case-sensitive
@@ -214,12 +251,12 @@ class TransformerEvaluator(object):
     return case_insensitive_score, case_sensitive_score
 
   def _trim_and_decode(self, ids):
-    """Trim tokens at EOS and beyond EOS in ids, and decode the remaining ids to
-    text.
+    """Trims tokens at EOS and beyond EOS in ids, and decodes the remaining ids 
+    back to text.
 
     Args:
       ids: numpy array of shape [num_ids], the translated ids ending with EOS id
-        and padded with PAD ID. 
+        and zero-padded. 
 
     Returns:
       string scalar, the decoded text string.
@@ -230,8 +267,9 @@ class TransformerEvaluator(object):
     except ValueError:  # No EOS found in sequence
       return self._subtokenizer.decode(ids)
 
+
 def _get_sorted_lines(filename):
-  """Read raw text lines from a text file, and sort the lines in descending 
+  """Reads raw text lines from a text file, and sort the lines in descending 
   order of the num of space-separated words.
 
   Example:
@@ -254,13 +292,15 @@ def _get_sorted_lines(filename):
   """
   with tf.io.gfile.GFile(filename) as f:
     lines = f.read().split('\n')
+    # split line by single-space ' '
     lines = [line.strip() for line in lines]
+    # skip empty lines
     if len(lines[-1]) == 0:
       lines.pop()
 
   # each line is converted to tuple (index, num_of_words, raw_text), and 
   # sorted in descending order of `num_words`
-  lines_w_lengths = [(i, len(line.split()), line)
+  lines_w_lengths = [(i, len(line.split()), line) 
       for i, line in enumerate(lines)]
   lines_w_lengths = sorted(lines_w_lengths, key=lambda l: l[1], reverse=True)
   
@@ -274,8 +314,9 @@ def _get_sorted_lines(filename):
 
   return sorted_lines, sorted_indices
 
+
 def _write_translations(output_filename, sorted_indices, translations):
-  """Write translations to a text file.
+  """Writes translations to a text file.
 
   Args:
     output_filename: string scalar, name of the file that translations will be 
@@ -287,9 +328,3 @@ def _write_translations(output_filename, sorted_indices, translations):
   with tf.io.gfile.GFile(output_filename, "w") as f:
     for i in sorted_indices:
       f.write("%s\n" % translations[i])
-
-
-class TransformerInferencer(object):
-  def __init__(self):
-    pass
-

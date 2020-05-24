@@ -1,5 +1,5 @@
-"""Translate source sequences into target sequences, and optionally evaluates 
-BLEU score in groundtruth target sequences are provided.
+"""Translates source sequences into target sequences, and optionally evaluates 
+BLEU score if groundtruth target sequences are provided.
 """
 import tensorflow as tf
 from absl import app
@@ -33,7 +33,7 @@ flags.DEFINE_float(
 flags.DEFINE_integer(
     'decode_batch_size', 32, 'Number of sequences in a batch for inference.')
 flags.DEFINE_integer(
-    'decode_max_length', 97, 'Max number of tokens that will be decoded for a '
+    'decode_max_length', 100, 'Max number of tokens that will be decoded for a '
         'given source sequence.') 
 
 
@@ -76,9 +76,8 @@ def main(_):
   target_text_filename = FLAGS.target_text_filename
   translation_output_filename = FLAGS.translation_output_filename
 
-
+  # transformer model
   subtokenizer = tokenization.restore_subtokenizer_from_vocab_files(vocab_path)
-
   vocab_size = subtokenizer.vocab_size
   model = TransformerModel(vocab_size=vocab_size,
                            encoder_stack_size=encoder_stack_size,
@@ -92,24 +91,26 @@ def main(_):
                            alpha=alpha)
 
   ckpt = tf.train.Checkpoint(model=model)
-
   latest_ckpt = tf.train.latest_checkpoint(model_dir)
-
   ckpt.restore(latest_ckpt).expect_partial()
 
-
+  # build evaluator
   evaluator = TransformerEvaluator(
       model, subtokenizer, decode_batch_size, decode_max_length)
 
-
-  case_insensitive_score, case_sensitive_score = evaluator.evaluate(
-      source_text_filename, target_text_filename, translation_output_filename) 
-
-  if case_insensitive_score is not None and case_sensitive_score is not None:
+  # translates input sequences, and optionally evaluates BLEU score if 
+  # groundtruth target sequences are provided
+  if target_text_filename is not None:
+    case_insensitive_score, case_sensitive_score = evaluator.evaluate(
+        source_text_filename, target_text_filename, translation_output_filename)
     print('BLEU(case insensitive): %f' % case_insensitive_score)
     print('BLEU(case sensitive): %f' % case_sensitive_score)
   else:
-    print('Inference mode: no groundtruth translations.')
+    evaluator.translate(
+        source_text_filename, translation_output_filename)
+    print('Inference mode: no groundtruth translations.\nTranslations written '
+        'to file "%s"' % translation_output_filename)
+
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('source_text_filename')

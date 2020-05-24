@@ -1,12 +1,12 @@
-"""Definition of utility functions.
-"""
+"""Defines of utility functions."""
 import math
 
+import numpy as np
 import tensorflow as tf
 
 
 def get_padding_mask(inputs, padding_value=0):
-  """Create a tensor used to mask out padded tokens.
+  """Creates a tensor used to mask out padded tokens.
 
   Args:
     inputs: int tensor of shape [batch_size, src_seq_len], token ids
@@ -21,9 +21,10 @@ def get_padding_mask(inputs, padding_value=0):
   mask = tf.cast(tf.equal(inputs, padding_value), 'float32') 
   mask = mask[:, tf.newaxis, tf.newaxis, :]
   return mask
-  
+ 
+ 
 def get_look_ahead_mask(seq_len):
-  """Create a tensor used to mask out future tokens in the target sequences at
+  """Creates a tensor used to mask out future tokens in the target sequences at
   training time.
 
   Given sequence length `L` of target sequence, the mask would be a L x L
@@ -47,8 +48,9 @@ def get_look_ahead_mask(seq_len):
   mask = mask[tf.newaxis, tf.newaxis, :, :]
   return mask
 
+
 def get_positional_encoding(seq_len, hidden_size):
-  """Create a tensor that encodes positional information.
+  """Creates a tensor that encodes positional information.
 
   Args:
     seq_len: int scalar tensor, sequence length.
@@ -70,12 +72,15 @@ def get_positional_encoding(seq_len, hidden_size):
 
 
 def compute_loss(labels, logits, smoothing, vocab_size):
-  """Compute average (per-token) cross entropy loss.
+  """Computes average (per-token) cross entropy loss.
 
   Args:
-    labels: [batch_size, tgt_seq_len]
-    logits: [batch_size, tgt_seq_len, vocab_size]
-    smoothing: 0.1
+    labels: int tensor of shape [batch_size, tgt_seq_len], the groundtruth
+      token ids.
+    logits: float tensor of shape [batch_size, tgt_seq_len, vocab_size], the
+      predicted logits of tokens over the vocabulary.
+    smoothing: float scalar, the amount of label smoothing applied to the
+      one-hot class labels. 
     vocab_size: int scalar, num of tokens (including SOS and EOS) in the 
       vocabulary.
 
@@ -120,7 +125,7 @@ class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     self._warmup_steps = tf.cast(warmup_steps, 'float32')
 
   def __call__(self, global_step):
-    """Compute learning rate with linear warmup and rsqrt decay.
+    """Computes learning rate with linear warmup and rsqrt decay.
 
     Args:
       global_step: int scalar tensor, the current global step. 
@@ -155,3 +160,14 @@ def create_optimizer(learning_rate, beta1, beta2, epsilon):
                                        beta2, 
                                        epsilon=epsilon)
   return optimizer
+
+
+def save_attention_weights(filename, data):
+  """Saves attention weights data to *.npy file.
+
+  Args:
+    filename: string scalar, filename.
+    data: a list or tuple or dict of numpy arrays, the attention weights and 
+      token ids of input and translated sequence.
+  """
+  np.save(filename, data)

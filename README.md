@@ -15,7 +15,7 @@ At the core of the Transformer model is the *self-attention* mechanism used by t
 </p>
 
 
-The idea of self-attention so influtial, which led to more recent breakthroughs in methods of language model pretraining such as BERT and GPT-2.
+The idea of self-attention is so influtial that has inspired recent breakthroughs in methods of language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
 
 ## Requirements
 This implementation is based on TensorFlow 2.x and Python3. In addition, NLTK is required to compute BLEU score for evaluation.
@@ -30,7 +30,7 @@ git clone git@github.com:chao-ji/tf-transformer.git
 
 ## Data Preparation
 
-The training parallel corpus should be in the form of a list of text file(s) in source language, paired with a list of text file(s) in target language, where in each file the sequences are separated by newline symbols:
+The training corpus should be in the form of a list of text file(s) in source language, paired with a list of text file(s) in target language, where in each file the sequences are separated by `\n`s:
 
 ```
 source_file_1.txt   target_file_1.txt
@@ -99,46 +99,63 @@ python run_evaluator.py --help
 ```
 
 
-## Attention Weights
+## Visualize Attention Weights
+
+Note that the attention mechanism computes token-to-token similarities that can be visualized to understand by how much a token attends to other tokens. When you run `python run_evaluator.py` the attention weight matrices are saved to `.npy` files, which can be displayed by running:   
+
+```bash
+python run_visualizer.py \
+  --attention_file=/path/to/attention_data_file.npy \
+  --vocab_path=/path/to/vocab/files
+```
+
+Shown below are three sentences in English (source language) and their translations in German (target language).
+
 **Input sentences in source langauge**
 
 ```
-It is in this spirit that a majority of American governments have passed new laws since 2009 making the registration or voting process more difficult.
-Google's free service instantly translates words, phrases, and web pages between English and over 100 other languages.
-What you said is completely absurd.
+1. It is in this spirit that a majority of American governments have passed new laws since 2009 making the registration or voting process more difficult.
+2. Google's free service instantly translates words, phrases, and web pages between English and over 100 other languages.
+3. What you said is completely absurd.
 ```
 
 **Translated sentences in target language**
 ```
-In diesem Sinne haben die meisten amerikanischen Regierungen seit 2009 neue Gesetze verabschiedet, die die Registrierung oder das Abstimmungsverfahren schwieriger machen.
-Der kostenlose Service von Google übersetzt Wörter, Phrasen und Webseiten zwischen Englisch und über 100 anderen Sprachen.
-Was Sie gesagt haben, ist völlig absurd.
+1. In diesem Sinne haben die meisten amerikanischen Regierungen seit 2009 neue Gesetze verabschiedet, die die Registrierung oder das Abstimmungsverfahren schwieriger machen.
+2. Der kostenlose Service von Google übersetzt Wörter, Phrasen und Webseiten zwischen Englisch und über 100 anderen Sprachen.
+3. Was Sie gesagt haben, ist völlig absurd.
 ```
+
+The transformer model computes three types of attentions: 
+
+* source-source: source sentence attends to source sentence (used in Encoder).
 
 
 <p align="center ">
   <img src="g3doc/images/src_src.png" width="600">
   <br>
-  Source-to-Source attention weights 
+  Source-to-Source attention weights.  
 </p>
 
+Notice the attention weight from `more_` and `difficult_` to `making` -- they are actively "searching" for the verb when trying to complete the phrase "make ... more difficult".
 
+* target-source: target sentence attends to source sentence (used in Decoder).
 <p align="center ">
   <img src="g3doc/images/tgt_src.png" width="600">
   <br>
-  Target-to-Source attention weights
+  Target-to-Source attention weights.
 </p>
 
+Notice the attention weight from `uebersetz` (target) to `translat` (source), from `Webseiten` (target) to `web` (source), etc. This is probably due to their synonymity in German and English.
 
+* target-target: target sentence attends to target sentence (used in Decoder).
 <p align="center ">
   <img src="g3doc/images/tgt_tgt.png" width="600">
   <br>
-  Target-to-Target attention weights
+  Target-to-Target attention weights.
 </p>
 
-
-
-
+Notice the attention paid to `Was` by `Was`, `Sie_`, `gesagt`, `haben_` -- as the decoder spits out these subtokens, it needs to "be aware" of the scope of the clause `Was Sie gesagt haben` (what you've said).
 
 ## Reference
 * [TensorFlow official implementation of Transformer](https://github.com/tensorflow/models/tree/master/official/nlp/transformer)

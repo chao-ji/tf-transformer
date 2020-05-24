@@ -132,7 +132,10 @@ class BeamSearch(object):
     finished_flags = finished_state[FINISHED_FLAGS]
     active_cache = finished_state[ACTIVE_CACHE]
 
+    # flag it True if any beam in a thread of seach in a batch is finished 
+    # [batch_size]
     finished_cond = tf.reduce_any(finished_flags, 1)
+
     # if none of the beams end with finished seqs, we return the remaining 
     # active seqs.
     # [batch_size, beam_width, decode_seq_len]
@@ -141,7 +144,7 @@ class BeamSearch(object):
     # [batch_size, beam_width]
     finished_scores = tf.where(finished_cond[:, tf.newaxis], 
         finished_scores, active_log_probs)
-  
+
     tgt_tgt_attention = [
         active_cache['layer_%d' % i]['tgt_tgt_attention'].numpy()[:, 0] 
         for i in range(self._decoder_stack_size)]
@@ -389,6 +392,7 @@ class BeamSearch(object):
 
     # log_probs: [batch_size, beam_width, vocab_size]
     log_probs = candidate_log_probs + tf.expand_dims(active_log_probs, axis=2)
+
     flat_log_probs = tf.reshape(log_probs,
                                 [-1, self._beam_width * self._vocab_size])
 
@@ -570,7 +574,9 @@ def _gather_beams(nested, beam_indices):
   """
   batch_size, new_beam_width = tf.shape(beam_indices)
 
-  # batch_indices: [[0,0,...],[1,1,...],...,[batch_size-1,batch_size-1,...]]
+  # For example, given batch_size = 3
+  # batch_indices = [[0, 0,...,0],[1, 1,...,1], ...,[2, 2,...,2]]
+  # each sublist has length `new_beam_width`
   batch_indices = tf.tile(tf.range(batch_size)[:, tf.newaxis], 
                           [1, new_beam_width])
   indices = tf.stack([batch_indices, beam_indices], axis=2)
@@ -580,6 +586,16 @@ def _gather_beams(nested, beam_indices):
 
 def _gather_topk(nested, scores, flags, k):
   """Gathers top-k scoring valid beams (the corresponding flag is True).
+
+  For example, given
+  scores = [-0.32, -0.59, -0.11, -0.05, -0.96, -0.87]
+  flags = [True, False, False, True, False, True]
+  k = 4
+  
+  The scores for False flags will be pushed to -inf, and the results will be
+  scores = [-0.05, -0.32, -0.87, -inf]
+  flags = [True, True, True, False]
+
 
   Note: if the num of valid seqs across all beams for each batch is less than 
   `k`, the result is padded with invalid seqs. 

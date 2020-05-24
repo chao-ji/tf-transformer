@@ -186,6 +186,7 @@ class Attention(tf.keras.layers.Layer):
 
     # [batch_size, num_heads, q_seq_len, r_seq_len]
     attention_weights += token_mask * NEG_INF
+
     # [batch_size, num_heads, q_seq_len, r_seq_len]
     attention_weights = tf.nn.softmax(attention_weights, axis=3)
     attention_weights = self._dropout_layer(
@@ -825,7 +826,7 @@ class TransformerModel(tf.keras.Model):
     scores = scores[:, 0] 
 
     src_src_attention = [
-        self._encoder._stack[i]._mha._attention_weights
+        self._encoder._stack[i]._mha._attention_weights.numpy()
         for i in range(self._encoder._stack_size)]
 
     return (decoded_ids, scores, 
