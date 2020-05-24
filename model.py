@@ -206,7 +206,7 @@ class Attention(tf.keras.layers.Layer):
         # [batch_size, num_heads, tgt_src_len, src_seq_len]
         cache['tgt_src_attention'] = tf.concat([
             cache['tgt_src_attention'], attention_weights], axis=2)
-      
+
     # [batch_size, q_seq_len, num_heads, size_per_head]
     outputs = tf.einsum('NHQR,NRHS->NQHS', attention_weights, value) 
 
@@ -700,7 +700,7 @@ class TransformerModel(tf.keras.Model):
     Returns:
       logits: float tensor of shape [batch_size, tgt_seq_len, vocab_size]. 
     """
-    padding_mask = utils.get_padding_mask(src_token_ids)
+    padding_mask = utils.get_padding_mask(src_token_ids, SOS_ID)
     encoder_outputs = self._encode(src_token_ids, padding_mask, training=True)
     logits = self._decode(
         tgt_token_ids, encoder_outputs, padding_mask)
@@ -852,7 +852,7 @@ class TransformerModel(tf.keras.Model):
           'tgt_src_attention': tensor of shape [batch_size, num_heads,
             0, src_seq_len].
     """
-    padding_mask = utils.get_padding_mask(src_token_ids)
+    padding_mask = utils.get_padding_mask(src_token_ids, SOS_ID)
     encoder_outputs = self._encode(src_token_ids, padding_mask, training=False)
     size_per_head = self._hidden_size // self._num_heads
     src_seq_len = padding_mask.shape[-1] 
@@ -881,6 +881,9 @@ class TransformerModel(tf.keras.Model):
 
   def _build_decoding_fn(self, max_decode_length):
     """Builds the decoding function that will be called in beam search.
+
+    The function steps through the proposed token ids one at a time, and 
+    generates the logits of next token id over the vocabulary.
 
     Args:
       max_decode_length: int scalar, the decoded sequences would not exceed
@@ -919,7 +922,7 @@ class TransformerModel(tf.keras.Model):
               num_heads, seq_len, seq_len],
             'tgt_src_attention': tensor of shape [batch_size * beam_width, 
               num_heads, seq_len, src_seq_len].
-            Note `src_len` is the running length of the growing decode sequence.
+            Note `seq_len` is the running length of the growing decode sequence.
 
       Returns:
         logits: float tensor of shape [batch_size * beam_width, vocab_size].

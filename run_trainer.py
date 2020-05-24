@@ -99,12 +99,12 @@ def main(_):
   # transformer model
   subtokenizer = tokenization.restore_subtokenizer_from_vocab_files(vocab_path)
   vocab_size = subtokenizer.vocab_size 
-  model = TransformerModel(encoder_stack_size=encoder_stack_size,
+  model = TransformerModel(vocab_size=vocab_size,
+                           encoder_stack_size=encoder_stack_size,
                            decoder_stack_size=decoder_stack_size,
                            hidden_size=hidden_size, 
                            num_heads=num_heads,
                            filter_size=filter_size,
-                           vocab_size=vocab_size,
                            dropout_rate=dropout_rate)
 
   # training dataset

@@ -80,13 +80,16 @@ def main(_):
   subtokenizer = tokenization.restore_subtokenizer_from_vocab_files(vocab_path)
 
   vocab_size = subtokenizer.vocab_size
-  model = TransformerModel(encoder_stack_size=encoder_stack_size,
+  model = TransformerModel(vocab_size=vocab_size,
+                           encoder_stack_size=encoder_stack_size,
                            decoder_stack_size=decoder_stack_size,
                            hidden_size=hidden_size,
                            num_heads=num_heads,
                            filter_size=filter_size,
-                           vocab_size=vocab_size,
-                           dropout_rate=dropout_rate)
+                           dropout_rate=dropout_rate,
+                           extra_decode_length=extra_decode_length,
+                           beam_width=beam_width,
+                           alpha=alpha)
 
   ckpt = tf.train.Checkpoint(model=model)
 
@@ -102,8 +105,11 @@ def main(_):
   case_insensitive_score, case_sensitive_score = evaluator.evaluate(
       source_text_filename, target_text_filename, translation_output_filename) 
 
-  print('BLEU(case intensirive): %f' % case_insensitive_score)
-  print('BLEU(case sensitive): %f' % case_sensitive_score)
+  if case_insensitive_score is not None and case_sensitive_score is not None:
+    print('BLEU(case insensitive): %f' % case_insensitive_score)
+    print('BLEU(case sensitive): %f' % case_sensitive_score)
+  else:
+    print('Inference mode: no groundtruth translations.')
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('source_text_filename')

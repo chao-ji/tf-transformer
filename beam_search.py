@@ -19,14 +19,13 @@ FINISHED_FLAGS = "FINISHED_FLAGS"
 class BeamSearch(object):
   """Beam Search Decoder.
 
-  This implementation adopts the aggressive search strategy. Specifically, for
-  each concurrent thread of search in a batch, we keep track of `beam_width` 
-  active sequences (i.e. not yet reached EOS_ID), and `beam_width` finished 
-  sequences (i.e. already reached EOS_ID). 
-
-  By "aggressive" we mean that we always keep `beam_width` active sequences even 
-  if some beams have already reached EOS_ID, in the hope that some ongoing 
-  searches may end up with higher scores than previously finished searches.
+  This implementation of beam search adopts the aggressive strategy -- we 
+  maintain the maximum number of `beam_width` active threads of searches (i.e. 
+  sequences that have not yet reached EOS_ID), even though some active searches 
+  may eventually turn into finished ones. This way we can make sure that the 
+  maximum number of active candidate sequences are considered in each decoding 
+  step, because some of them may end up with higher scores than previously 
+  finished searches (i.e. those that reached EOS_ID).
 
   The loop invariants maintained over the search iterations are as follows:
 
@@ -54,7 +53,7 @@ class BeamSearch(object):
     Args:
       decoding_fn: a callable, which is the interface to the Transformer model. 
         The input arguments are:
-          ids: tensor of shape [batch_size*beam_width, index].
+          ids: tensor of shape [batch_size*beam_width, 1].
           index: int scalar.
           cache: nested dictionary of tensors [batch_size*beam_width, ...].
         The function returns a tuple of logits and the updated cache:
@@ -63,7 +62,7 @@ class BeamSearch(object):
             input cache.
       vocab_size: int scalar, the size of the vocabulary, used for topk
         computation.
-      batch_size: int scalar, the decode batch size.
+      batch_size: int scalar, the inference batch size.
       beam_width: int scalar, number of beams for beam search.
       alpha: float scalar, defining the strength of length normalization.
       max_decode_length: int scalar, the maximum number of steps to decode
@@ -77,7 +76,7 @@ class BeamSearch(object):
     self._batch_size = batch_size
     self._beam_width = beam_width
     self._alpha = alpha
-    self._mac_decode_length = max_decode_length
+    self._max_decode_length = max_decode_length
     self._eos_id = eos_id
     self._decoder_stack_size = decoder_stack_size
 
@@ -86,8 +85,8 @@ class BeamSearch(object):
         (5. + tf.cast(length, 'float32')) / 6., self._alpha)
 
   def search(self, initial_ids, initial_cache):
-    """Searches for sequences with greatest probabilities by keeping track of 
-    the most promising candidates (i.e. beams).
+    """Searches for sequences with greatest log-probs by keeping track of 
+    `beam_width` most promising candidates (i.e. beams).
 
     Args:
       initial_ids: int tensor of shape [batch_size], populated with initial ids 
@@ -174,8 +173,8 @@ class BeamSearch(object):
     active_seq = tf.expand_dims(active_seq, axis=2)
 
     # set the log-probs of all beams to -inf except that the first beam set to 
-    # zero, so that we are effectively using only the first beam at the 
-    # beginning 
+    # zero, so that we are effectively using only the first beam in the first 
+    # decoding step 
     # active_log_probs: [batch_size, beam_width]
     active_log_probs = tf.tile(tf.constant(
         [[0.] + [-float("inf")] * (self._beam_width - 1)], dtype='float32'), 
@@ -237,7 +236,8 @@ class BeamSearch(object):
       2. It is True that for all concurrent searches in a batch, the worst score
         of finished seqs over all beams > the best score of active seqs over all 
         beams -- the remaining candidate active seqs will never outscore the 
-        current finished seqs.
+        current finished seqs (because scores of active seqs will certainly get 
+        lower with the growing length).
 
     Args:
       state: a dict holding the loop invariant tensors over the decoding 
@@ -258,12 +258,12 @@ class BeamSearch(object):
     # active_log_probs are always negative, so the best scores of active seqs
     # are achieved when the length penalty is maximal
     # best_active_scores: [batch_size]
-    max_length_norm = self._length_normalization(self._mac_decode_length)
+    max_length_norm = self._length_normalization(self._max_decode_length)
     best_active_scores = active_log_probs[:, 0] / max_length_norm  
 
     # if there are no finished seqs in a batch, set the worst finished score to 
     # negative infinity for that batch
-    # finished_batches: [batch_size]
+    # finished_batch_flags: [batch_size], True if any beam is finished
     # worst_finished_scores: [batch_size]
     finished_batch_flags = tf.reduce_any(finished_flags, 1)
     worst_finished_scores = tf.reduce_min(finished_scores, axis=1)
@@ -273,7 +273,7 @@ class BeamSearch(object):
     worst_finished_better_than_best_active = tf.reduce_all(
         tf.greater(worst_finished_scores, best_active_scores))
     return tf.logical_and(
-        tf.less(i, self._mac_decode_length), 
+        tf.less(i, self._max_decode_length), 
         tf.logical_not(worst_finished_better_than_best_active))
 
   def _search_step(self, state):
@@ -294,10 +294,11 @@ class BeamSearch(object):
     new_state = {CUR_INDEX: state[CUR_INDEX] + 1}
     new_state.update(active_state)
     new_state.update(finished_state)
+
     return [new_state]
 
   def _grow_active_seq(self, state):
-    """Grows the search tree of the active sequences by one level, and gather 
+    """Grows the search tree of the active sequences by one level, and gathers 
     the top-scoring `2 * beam_width` candidates.
 
     Note: we may have UP TO `beam_width` finished candidates (i.e. ending with 
@@ -339,6 +340,10 @@ class BeamSearch(object):
     # active_cache[padding_mask]: [batch_size, beam_width, 1, 1, src_seq_len]
     # active_cache[layer_L][k or v]: [batch_size, beam_width, cur_index, 
     #   num_heads, size_per_head]
+    # active_cache[layer_L][tgt_tgt_attention]: [batch_size, beam_width, 
+    #   num_heads, cur_index, cur_index]
+    # active_cache[layer_L][tgt_src_attention]: [batch_size, beam_width, 
+    #   num_heads, cur_index, src_seq_len]
     active_seq = state[ACTIVE_SEQ]
     active_log_probs = state[ACTIVE_LOG_PROBS]
     active_cache = state[ACTIVE_CACHE]
@@ -347,16 +352,17 @@ class BeamSearch(object):
     # for `active_seq` and `active_cache`, do reshaping
     # [batch_size, beam_width, ...] ==> [batch_size * beam_width, ...]
     flat_active_seq = _flatten_beam_dim(active_seq)
-    flat_cache = map_structure(_flatten_beam_dim, active_cache)  
+    flat_cache = map_structure(_flatten_beam_dim, active_cache)
 
     # flat_logits: [batch_size * beam_width, vocab_size]
-    # the key and value tensors in `flat_cache` are extended by one in the 
-    # `decode_seq_len` dimension.
+    # the `cur_index` of `k`, `v`, `tgt_tgt_attention`, `tgt_src_attention` 
+    # tensors  in `flat_cache` are incremented 
     flat_logits, flat_cache = self._decoding_fn(
         flat_active_seq[:, -1:], i, flat_cache)
 
-    # push the logits of SOS_ID to -inf so that SOS will never appear in the 
-    # decoded sequence 
+    # SOS should be excluded from the space of valid output tokens, so we push
+    # the logits of SOS_ID to -inf so that SOS will never appear in the decoded 
+    # sequence 
     sos_mask = tf.constant(
         [1] + [0] * (self._vocab_size - 1), dtype='float32') * NEG_INF 
     flat_logits += sos_mask
@@ -391,10 +397,10 @@ class BeamSearch(object):
     topk_seq, new_cache = _gather_beams(
         [active_seq, new_cache], topk_beam_indices)
 
-    # append the top `doubled_beam_width` ids to the growing active seqs
+    # append the top `doubled_beam_width` ids (`topk_ids`) to the growing active 
+    # seqs (`topk_seq`)
     # topk_ids: [batch_size, doubled_beam_width]
-    topk_ids = topk_indices % self._vocab_size
-    topk_ids = tf.expand_dims(topk_ids, axis=2)
+    topk_ids = tf.expand_dims(topk_indices % self._vocab_size, axis=2)
     topk_seq = tf.concat([topk_seq, topk_ids], axis=2)
     return topk_seq, topk_log_probs, new_cache
 
@@ -418,10 +424,12 @@ class BeamSearch(object):
           same shape as counterpart in input `new_cache`, except the beam 
           dimension changes to `beam_width` from `2 * beam_width`.
     """
+    # [batch_size, doubled_beam_width]
     new_active_flags = tf.logical_not(tf.equal(new_seq[:, :, -1], self._eos_id))
     top_active_seq, top_active_log_probs, top_active_cache = _gather_topk(
         [new_seq, new_log_probs, new_cache], 
         new_log_probs, new_active_flags, self._beam_width)
+
     return {ACTIVE_SEQ: top_active_seq,
             ACTIVE_LOG_PROBS: top_active_log_probs,
             ACTIVE_CACHE: top_active_cache}
@@ -457,8 +465,11 @@ class BeamSearch(object):
     # convert log-probs to scores by length normalization
     new_scores = new_log_probs / self._length_normalization(i + 1)
 
+    # flag the newly finished seqs (if any)
+    # [batch_size, doubled_beam_width]
     new_finished_flags = tf.equal(new_seq[:, :, -1], self._eos_id)
 
+    # combine previously finished seqs w/ those newly finished (if any)
     # finished_seq: [batch_size, beam_width * 3, cur_index + 2]
     # finished_scores: [batch_size, beam_width * 3]
     # finished_flags: [batch_size, beam_width * 3]
@@ -552,7 +563,7 @@ def _gather_beams(nested, beam_indices):
   """
   batch_size, new_beam_width = tf.shape(beam_indices)
 
-  # batch_pos: [[0,0,...],[1,1,...],...,[batch_size-1,batch_size-1,...]]
+  # batch_indices: [[0,0,...],[1,1,...],...,[batch_size-1,batch_size-1,...]]
   batch_indices = tf.tile(tf.range(batch_size)[:, tf.newaxis], 
                           [1, new_beam_width])
   indices = tf.stack([batch_indices, beam_indices], axis=2)
