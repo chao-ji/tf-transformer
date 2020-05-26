@@ -1,4 +1,4 @@
-"""Defines of utility functions."""
+"""Defines utility functions."""
 import math
 
 import numpy as np
@@ -6,17 +6,16 @@ import tensorflow as tf
 
 
 def get_padding_mask(inputs, padding_value=0):
-  """Creates a tensor used to mask out padded tokens.
+  """Creates a binary tensor to mask out padded tokens.
 
   Args:
     inputs: int tensor of shape [batch_size, src_seq_len], token ids
       of source sequences.
-    padding_value: int scalar, the id corresponding to padded tokens in the 
-      input. 
+    padding_value: int scalar, the vocabulary index of the PAD token. 
 
   Returns:
-    mask: float tensor of shape [batch_size, 1, 1, src_seq_len], holding ones
-      and zeros for regular token ids and padded token ids. 
+    mask: binary tensor of shape [batch_size, 1, 1, src_seq_len], storing ones
+      for padded tokens and zeros for regular tokens.
   """
   mask = tf.cast(tf.equal(inputs, padding_value), 'float32') 
   mask = mask[:, tf.newaxis, tf.newaxis, :]
@@ -24,11 +23,11 @@ def get_padding_mask(inputs, padding_value=0):
  
  
 def get_look_ahead_mask(seq_len):
-  """Creates a tensor used to mask out future tokens in the target sequences at
-  training time.
+  """Creates a tensor to mask out future tokens in the target sequences when in 
+  training mode.
 
   Given sequence length `L` of target sequence, the mask would be a L x L
-  matrix (when `tf.squeeze`ed) where upper diagonal entries are ones and all 
+  matrix (when `tf.squeeze`'ed) where upper diagonal entries are ones and all 
   other entries zeros.
 
   0, 1, 1, ..., 1
@@ -71,8 +70,14 @@ def get_positional_encoding(seq_len, hidden_size):
   return positional_encoding
 
 
-def compute_loss(labels, logits, smoothing, vocab_size):
+def compute_loss(labels, logits, smoothing, vocab_size, padding_value=0):
   """Computes average (per-token) cross entropy loss.
+
+  1. Applies label smoothing -- all entries in the groundtruth label tensor  
+     get non-zero probability mass.
+  2. Computes per token loss of shape [batch_size, tgt_seq_len], where padded
+     positions are masked, and then the sum of per token loss is normalized by
+     the total number of non-padding entries.
 
   Args:
     labels: int tensor of shape [batch_size, tgt_seq_len], the groundtruth
@@ -83,30 +88,44 @@ def compute_loss(labels, logits, smoothing, vocab_size):
       one-hot class labels. 
     vocab_size: int scalar, num of tokens (including SOS and EOS) in the 
       vocabulary.
+    padding_value: int scalar, the vocabulary index of the PAD token. 
 
   Returns:
     loss: float scalar tensor, the per-token cross entropy
   """
+  # effective_vocab = vocab - {SOS_ID}
   effective_vocab_size = vocab_size - 1
-  conf = 1.0 - smoothing    # 0.9
-  low_conf = smoothing / (effective_vocab_size - 1) # close to 0.0
+
+  # prob mass allocated to the token that should've been predicted 
+  on_value = 1.0 - smoothing 
+  # prob mass allocated to all other tokens
+  off_value = smoothing / (effective_vocab_size - 1)
 
   # [batch_size, tgt_seq_len, vocab_size] 
   labels_one_hot = tf.one_hot(
       labels,
       depth=vocab_size,
-      on_value=conf,
-      off_value=low_conf)
+      on_value=on_value,
+      off_value=off_value)
 
+  # compute cross entropy over all tokens in vocabulary but SOS_ID (i.e. 0)
+  # because SOS_ID should never appear in the decoded sequence
+  # [batch_size, tgt_seq_len]
   cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
       labels=labels_one_hot[:, :, 1:], logits=logits[:, :, 1:])
-  normalizing_constant = -(conf * tf.math.log(conf) +
-      (effective_vocab_size - 1) * low_conf * tf.math.log(low_conf + 1e-20))
 
+  # this is the entropy when the softmax'ed logits == groundtruth labels
+  # so it should be deducted from `cross_entropy` to make sure the minimum 
+  # possible cross entropy == 0
+  normalizing_constant = -(on_value * tf.math.log(on_value) +
+      (effective_vocab_size - 1) * off_value * tf.math.log(off_value + 1e-20))
   cross_entropy -= normalizing_constant
-  weights = tf.cast(tf.not_equal(labels, 0), 'float32')
+
+  # mask out predictions where the labels == `padding_value`  
+  weights = tf.cast(tf.not_equal(labels, padding_value), 'float32')
   cross_entropy *= weights
-  return tf.reduce_sum(cross_entropy) / tf.reduce_sum(weights)
+  loss = tf.reduce_sum(cross_entropy) / tf.reduce_sum(weights)
+  return loss
 
 
 class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
@@ -142,6 +161,7 @@ class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     # rsqrt decay
     learning_rate /= tf.sqrt(tf.maximum(global_step, self._warmup_steps))
     return learning_rate
+
 
 def create_optimizer(learning_rate, beta1, beta2, epsilon):
   """Creates Adam optimizer.

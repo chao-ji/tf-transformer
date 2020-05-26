@@ -217,7 +217,7 @@ def create_subtokenizer_from_raw_text_files(filenames,
       # file. 
       file_byte_budget = file_byte_limit
       counter = 0
-      lines_to_skip = int(reader.size() / (file_byte_budget * 2))
+      lines_to_skip = int(reader.size() / (file_byte_budget * 1))
       for line in reader:
         if counter < lines_to_skip:
           counter += 1
