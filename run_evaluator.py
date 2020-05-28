@@ -46,7 +46,7 @@ flags.DEFINE_string(
     'target_text_filename', None, 'Path to the target (reference) text '
         'sequences that the translation will be checked against,')
 flags.DEFINE_string(
-    'translation_output_filename', 'translations.text', 'Path to the output '
+    'translation_output_filename', 'translations.txt', 'Path to the output '
         'file that the translations will be written to.')
 flags.DEFINE_string(
     'model_dir', None, 'Path to the directory that checkpoint files will be '
