@@ -106,8 +106,8 @@ python run_evaluator.py --help
 
 Note that the attention mechanism computes token-to-token similarities that can be visualized to understand how the attention is distributed over different tokens. When you run `python run_evaluator.py` the attention weight matrices will be saved to file `attention_xxxx.npy`, which stores a dict of the following entries:
 
-* `src`: numpy array of shape `[batch_size, src_seq_len]`, where each row is a sequence of token IDs that ends with 1 and padded with zeros.  
-* `tgt`: numpy array of shape `[batch_size, tgt_seq_len]`, where each row is a sequence of token IDs that ends with 1 and padded with zeros.
+* `src`: numpy array of shape `[batch_size, src_seq_len]`, where each row is a sequence of token IDs that ends with 1 (`EOS_ID`) and padded with zeros.  
+* `tgt`: numpy array of shape `[batch_size, tgt_seq_len]`, where each row is a sequence of token IDs that ends with 1 (`EOS_ID`)and padded with zeros.
 * `src_src_attention`: numpy array of shape `[batch_size, num_heads, src_seq_len, src_seq_len]` 
 * `tgt_src_attention`: numpy array of shape `[batch_size, num_heads, tgt_seq_len, src_seq_len]` 
 * `tgt_tgt_attention`: numpy array of shape `[batch_size, num_heads, tgt_seq_len, tgt_seq_len]` 

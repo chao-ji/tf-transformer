@@ -81,12 +81,15 @@ def main(_):
   draw_attention_weights(
     src[index], src[index], src_src[index, head], subtoken_list)
   plt.savefig('src_src.png', dpi=256)
+  print('src_src_attention saved to "src_src.png".')
   draw_attention_weights(
     tgt[index], src[index], tgt_src[index, head], subtoken_list)
   plt.savefig('tgt_src.png', dpi=256)
+  print('tgt_src_attention saved to "tgt_src.png".')
   draw_attention_weights(
     tgt[index], tgt[index], tgt_tgt[index, head], subtoken_list)
   plt.savefig('tgt_tgt.png', dpi=256)
+  print('tgt_tgt_attention saved to "tgt_tgt.png".')
 
 
 if __name__ == '__main__':
