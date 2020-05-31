@@ -124,19 +124,19 @@ class TransformerTrainer(object):
 
 class TransformerEvaluator(object):
   """Evaluates a Transformer model."""
-  def __init__(self, model, subtokenizer, decode_batch_size, decode_max_length):
+  def __init__(self, model, subtokenizer, decode_batch_size, src_max_length):
     """Constructor.
 
     Args:
       model: an instance of TransformerModel instance.
       subtokenizer: a SubTokenizer instance.
       decode_batch_size: int scalar, num of sequences in a batch to be decoded.
-      decode_max_length: int scalar, max length of decoded sequence.
+      src_max_length: int scalar, max length of decoded sequence.
     """
     self._model = model
     self._subtokenizer = subtokenizer
     self._decode_batch_size = decode_batch_size
-    self._decode_max_length = decode_max_length
+    self._src_max_length = src_max_length
     self._bleu_tokenizer = tokenization.BleuTokenizer()
 
   def translate(self, source_text_filename, output_filename=None):
@@ -160,8 +160,8 @@ class TransformerEvaluator(object):
 
     def input_generator():
       # encodes each line into a list of subtoken ids (ending with EOS_ID) and 
-      # zero-pads to length `decode_max_length`, and finally batches to shape
-      # [batch_size, decode_max_length]
+      # zero-pads or truncated to length `src_max_length`, and finally batches 
+      # to shape [batch_size, src_max_length]
       for i in range(num_decode_batches):
         lines = [sorted_lines[j + i * batch_size]
             for j in range(batch_size)
@@ -169,7 +169,7 @@ class TransformerEvaluator(object):
         lines = [self._subtokenizer.encode(l, add_eos=True) for l in lines]
         batch = tf.keras.preprocessing.sequence.pad_sequences(
             lines,
-            maxlen=self._decode_max_length,
+            maxlen=self._src_max_length,
             dtype='int32',
             padding='post')
         yield batch

@@ -33,8 +33,8 @@ flags.DEFINE_float(
 flags.DEFINE_integer(
     'decode_batch_size', 32, 'Number of sequences in a batch for inference.')
 flags.DEFINE_integer(
-    'decode_max_length', 100, 'Max number of tokens that will be decoded for a '
-        'given source sequence.') 
+    'src_max_length', 100, 'The number of tokens that source sequences will be '
+        'truncated or zero-padded to in inference mode.') 
 
 
 flags.DEFINE_string(
@@ -70,7 +70,7 @@ def main(_):
   beam_width = FLAGS.beam_width
   alpha = FLAGS.alpha
   decode_batch_size = FLAGS.decode_batch_size
-  decode_max_length = FLAGS.decode_max_length
+  src_max_length = FLAGS.src_max_length
 
   source_text_filename = FLAGS.source_text_filename
   target_text_filename = FLAGS.target_text_filename
@@ -96,7 +96,7 @@ def main(_):
 
   # build evaluator
   evaluator = TransformerEvaluator(
-      model, subtokenizer, decode_batch_size, decode_max_length)
+      model, subtokenizer, decode_batch_size, src_max_length)
 
   # translates input sequences, and optionally evaluates BLEU score if 
   # groundtruth target sequences are provided
