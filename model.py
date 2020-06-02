@@ -332,7 +332,7 @@ class EmbeddingLayer(tf.keras.layers.Layer):
     # [vocab_size, hidden_size]
     embeddings = self._get_vocab_embeddings()
 
-    # [batch_size, src_seq_len, hidden_size]
+    # [batch_size, seq_len, hidden_size]
     embeddings = tf.gather(embeddings, inputs)
 
     embeddings *= self._hidden_size ** 0.5
@@ -806,7 +806,6 @@ class TransformerModel(tf.keras.Model):
     """
     batch_size, src_seq_len = tf.unstack(tf.shape(src_token_ids))
     max_decode_length = src_seq_len + self._extra_decode_length
-
     decoding_fn = self._build_decoding_fn(max_decode_length)
     decoding_cache = self._build_decoding_cache(src_token_ids, batch_size)
     sos_ids = tf.ones([batch_size], dtype='int32') * SOS_ID
