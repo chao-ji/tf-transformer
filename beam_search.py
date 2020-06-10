@@ -110,12 +110,13 @@ class BeamSearch(object):
         decode_seq_len], the finished decoded sequences over all beams.
       finished_scores: float tensor of shape [batch_size, beam_width], the 
         scores of finished decoded sequences over all beams.
-      tgt_tgt_attention: a list of `decoder_stack_size` float tensor of shape 
-        [batch_size, num_heads, tgt_seq_len, tgt_seq_len], target-to-target 
-        attention weights.
-      tgt_src_attention: a list of `decoder_stack_size` float tensor of shape 
-        [batch_size, num_heads, tgt_seq_len, src_seq_len], target-to-source 
-        attention weights.
+      active_cache: a dict with the same structure as the input `initial_cache`,
+        except that the shapes of the values of key `k`, `v`, 
+        `tgt_tgt_attention`, `tgt_src_attention` are
+        [batch_size, beam_width, decoded_seq_len, num_heads, size_per_head],
+        [batch_size, beam_width, decoded_seq_len, num_heads, size_per_head],
+        [batch_size, beam_width, num_heads, decoded_seq_len, decoded_seq_len],
+        [batch_size, beam_width, num_heads, decoded_seq_len, src_seq_len].
     """
     state, state_shapes = self._create_initial_state(initial_ids, initial_cache)
 
@@ -144,18 +145,12 @@ class BeamSearch(object):
     # [batch_size, beam_width, decode_seq_len]
     finished_seqs = tf.where(finished_cond[:, tf.newaxis, tf.newaxis], 
         finished_seqs, active_seqs)
+
     # [batch_size, beam_width]
     finished_scores = tf.where(finished_cond[:, tf.newaxis], 
         finished_scores, active_log_probs)
 
-    tgt_tgt_attention = [
-        active_cache['layer_%d' % i]['tgt_tgt_attention'].numpy()[:, 0] 
-        for i in range(self._decoder_stack_size)]
-    tgt_src_attention = [
-        active_cache['layer_%d' % i]['tgt_src_attention'].numpy()[:, 0] 
-        for i in range(self._decoder_stack_size)]
-
-    return finished_seqs, finished_scores, tgt_tgt_attention, tgt_src_attention
+    return finished_seqs, finished_scores, active_cache
 
   def _create_initial_state(self, initial_ids, initial_cache):
     """Creates initial loop invariant tensors and their shapes. This function

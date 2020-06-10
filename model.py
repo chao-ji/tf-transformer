@@ -818,8 +818,14 @@ class TransformerModel(tf.keras.Model):
                                 max_decode_length, 
                                 EOS_ID,
                                 self._decoder._stack_size)
-    decoded_ids, scores, tgt_tgt_attention, tgt_src_attention = bs.search(
-        sos_ids, decoding_cache)
+    decoded_ids, scores, decoding_cache = bs.search(sos_ids, decoding_cache)
+
+    tgt_tgt_attention = [
+        decoding_cache['layer_%d' % i]['tgt_tgt_attention'].numpy()[:, 0]
+        for i in range(self._decoder_stack_size)]
+    tgt_src_attention = [
+        decoding_cache['layer_%d' % i]['tgt_src_attention'].numpy()[:, 0]
+        for i in range(self._decoder_stack_size)]
 
     decoded_ids = decoded_ids[:, 0, 1:]
     scores = scores[:, 0] 
