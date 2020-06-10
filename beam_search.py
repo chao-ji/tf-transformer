@@ -371,7 +371,7 @@ class BeamSearch(object):
     # the `cur_index` of `k`, `v`, `tgt_tgt_attention`, `tgt_src_attention` 
     # tensors  in `flat_cache` are incremented 
     flat_logits, flat_cache = self._decoding_fn(
-        flat_active_seq[:, -1:], i, flat_cache)
+        flat_active_seq[:, -1:], flat_cache, index=i)
 
     # SOS should be excluded from the space of valid output tokens, so we push
     # the logits of SOS_ID to -inf so that SOS will never appear in the decoded 

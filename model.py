@@ -901,14 +901,12 @@ class TransformerModel(tf.keras.Model):
         max_decode_length, self._hidden_size)
     timing_signal = tf.cast(timing_signal, 'float32')
 
-    def decoding_fn(decoder_input, i, cache):
+    def decoding_fn(decoder_input, cache, **kwargs):
       """Computes the logits of the next decoded token ids.
 
       Args:
         decoder_input: int tensor of shape [batch_size * beam_width, 1], the 
           decoded tokens at index `i`.
-        i: int scalar tensor, the index of the `decoder_input` in the decoded
-          sequence. 
         cache: dict of entries
           'encoder_outputs': tensor of shape 
             [batch_size * beam_width, src_seq_len, hidden_size],
@@ -926,6 +924,9 @@ class TransformerModel(tf.keras.Model):
             'tgt_src_attention': tensor of shape [batch_size * beam_width, 
               num_heads, seq_len, src_seq_len].
             Note `seq_len` is the running length of the growing decode sequence.
+        kwargs: dict, storing the following additional keyword arguments.
+          index -> int scalar tensor, the index of the `decoder_input` in the 
+            decoded sequence.
 
       Returns:
         logits: float tensor of shape [batch_size * beam_width, vocab_size].
@@ -937,13 +938,14 @@ class TransformerModel(tf.keras.Model):
           [batch_size * beam_width, num_heads, seq_len + 1, seq_len + 1],
           [batch_size * beam_width, num_heads, seq_len + 1, src_seq_len].
       """
+      index = kwargs['index']
       # [batch_size * beam_width, 1, hidden_size]
       decoder_input = self._embedding_logits_layer(decoder_input, 'embedding')
-      decoder_input += timing_signal[i:i + 1]
+      decoder_input += timing_signal[index:index + 1]
 
       decoder_outputs = self._decoder(decoder_input,
                                       cache['encoder_outputs'],
-                                      tf.zeros((1, 1, 1, i + 1), 
+                                      tf.zeros((1, 1, 1, index + 1), 
                                           dtype='float32'),
                                       cache['padding_mask'],
                                       training=False,
