@@ -6,6 +6,9 @@ from absl import flags
 
 from data import tokenization
 
+from data.tokenization import SOS_ID
+from data.tokenization import EOS_ID
+
 
 flags.DEFINE_string(
     'vocab_path', None, 'Path to the vocabulary file.')
@@ -38,8 +41,8 @@ def draw_attention_weights(query,
       their vocabulary indices.
     figsize: tuple of two ints, figure size. 
   """
-  q_len = list(query).index(1) + 1
-  r_len = list(reference).index(1) + 1
+  q_len = list(query).index(EOS_ID) + 1
+  r_len = list(reference).index(EOS_ID) + 1
   attention_weights = attention_weights[:q_len, :r_len]
 
   fig = plt.figure(figsize=figsize)

@@ -4,13 +4,12 @@ import tensorflow as tf
 import beam_search 
 import utils
 
+from data.tokenization import SOS_ID
+from data.tokenization import EOS_ID
+
 
 # large negative value considered numerically as -inf
 NEG_INF = -1e9
-# vocab index of START-OF-SEQUENCE token (or PADDING token)
-SOS_ID = 0
-# vocab index of END-OF-SEQUENCE token
-EOS_ID = 1
 
 
 class Projection(tf.keras.layers.Layer):
@@ -795,10 +794,10 @@ class TransformerModel(tf.keras.Model):
       scores: float tensor of shape [batch_size], the scores (length-normalized 
         log-probs) of the decoded target sequences.
       tgt_tgt_attention: a list of `decoder_stack_size` float tensor of shape 
-        [batch_size, num_heads, tgt_seq_len, tgt_seq_len], target-to-target 
-        attention weights.
+        [batch_size, num_heads, decoded_seq_len, decoded_seq_len], 
+        target-to-target attention weights.
       tgt_src_attention: a list of `decoder_stack_size` float tensor of shape 
-        [batch_size, num_heads, tgt_seq_len, src_seq_len], target-to-source 
+        [batch_size, num_heads, decoded_seq_len, src_seq_len], target-to-source 
         attention weights.
       src_src_attention: a list of `encoder_stack_size` float tensor of shape 
         [batch_size, num_heads, src_seq_len, src_seq_len], source-to-source 

@@ -15,6 +15,9 @@ _ALPHANUMERIC_CHAR_SET = set(
        unicodedata.category(chr(i)).startswith('N'))
 _ESCAPE_CHARS = set(u"\\_u;0123456789")
 
+# vocab index of START-OF-SEQUENCE token (or PADDING token)
+SOS_ID = 0
+# vocab index of END-OF-SEQUENCE token
 EOS_ID = 1
 RESERVED_TOKENS = ['<pad>', '<EOS>']
 _UNDEFINED_UNICODE = '\u3013'

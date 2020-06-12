@@ -2,10 +2,11 @@
 import tensorflow as tf
 import numpy as np
 
+from data.tokenization import SOS_ID
+from data.tokenization import EOS_ID
+
 
 NEG_INF = -1e9
-SOS_ID = 0
-EOS_ID = 1
 
 CUR_INDEX = "CUR_INDEX"
 ACTIVE_SEQ = "ACTIVE_SEQ"
