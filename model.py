@@ -6,10 +6,7 @@ import utils
 
 from data.tokenization import SOS_ID
 from data.tokenization import EOS_ID
-
-
-# large negative value considered numerically as -inf
-NEG_INF = -1e9
+from beam_search import NEG_INF
 
 
 class Projection(tf.keras.layers.Layer):

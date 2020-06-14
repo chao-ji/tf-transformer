@@ -6,6 +6,7 @@ from data.tokenization import SOS_ID
 from data.tokenization import EOS_ID
 
 
+# large negative value considered numerically as -inf
 NEG_INF = -1e9
 
 CUR_INDEX = "CUR_INDEX"
