@@ -119,7 +119,17 @@ class BeamSearch(object):
         [batch_size, beam_width, num_heads, decoded_seq_len, decoded_seq_len],
         [batch_size, beam_width, num_heads, decoded_seq_len, src_seq_len].
     """
+    print('### def search')
+    print('initial_ids', initial_ids.shape)
+    print('initial_cache[layer_0][k]', initial_cache['layer_0']['k'].shape)
+    print('initial_cache[layer_0][v]', initial_cache['layer_0']['v'].shape)
+    print('initial_cache[layer_0][tgt_tgt_attention]', initial_cache['layer_0']['tgt_tgt_attention'].shape)
+    print('initial_cache[layer_0][tgt_src_attention]', initial_cache['layer_0']['tgt_src_attention'].shape)
+    print('initial_cache[encoder_outputs]', initial_cache['encoder_outputs'].shape)
+    print('initial_cache[padding_mask]', initial_cache['padding_mask'].shape)
+
     state, state_shapes = self._create_initial_state(initial_ids, initial_cache)
+    
 
     finished_state = map_structure(
         tf.stop_gradient, 
@@ -150,7 +160,7 @@ class BeamSearch(object):
     # [batch_size, beam_width]
     finished_scores = tf.where(finished_cond[:, tf.newaxis], 
         finished_scores, active_log_probs)
-
+    print('def search ###\n\n\n\n\n\n\n\n\n\n\n\n')
     return finished_seqs, finished_scores, active_cache
 
   def _create_initial_state(self, initial_ids, initial_cache):
@@ -176,6 +186,7 @@ class BeamSearch(object):
       state_shape_invariants: a dict with the same structure as `state`, where
         the values are the shape of the corresponding tensor.
     """
+    print('### def create_initial_state')
     cur_index = tf.constant(0)
 
     active_seq = _tile_beam_width(initial_ids, self._beam_width)
@@ -208,6 +219,14 @@ class BeamSearch(object):
              FINISHED_FLAGS: finished_flags}
 
     state_shape_invariants = self._get_state_shape_invariant(active_cache)
+    print('state[CUR_INDEX]', state[CUR_INDEX])
+    print('state[ACTIVE_SEQ]', state[ACTIVE_SEQ])
+    print('state[ACTIVE_LOG_PROBS]', state[ACTIVE_LOG_PROBS])
+    print('state[ACTIVE_CACHE]', state[ACTIVE_CACHE]['layer_0']['k'].shape, state[ACTIVE_CACHE]['layer_0']['v'].shape, state[ACTIVE_CACHE]['layer_0']['tgt_tgt_attention'].shape, state[ACTIVE_CACHE]['layer_0']['tgt_src_attention'].shape, state[ACTIVE_CACHE]['encoder_outputs'].shape, state[ACTIVE_CACHE]['padding_mask'].shape)
+    print('state[FINISHED_SEQ]', state[FINISHED_SEQ])
+    print('state[FINISHED_SCORES]', state[FINISHED_SCORES])
+    print('state[FINISHED_FLAGS]', state[FINISHED_FLAGS])
+    print('def create_initial_state ###\n\n')
     return state, state_shape_invariants
 
   def _get_state_shape_invariant(self, active_cache):
@@ -255,6 +274,7 @@ class BeamSearch(object):
     Returns:
       a bool scalar tensor, whether to continue search (True) or not (False).
     """
+    print('### def continue_search')
     i = state[CUR_INDEX]
 
     # active_log_probs: [batch_size, beam_width]
@@ -264,23 +284,33 @@ class BeamSearch(object):
     finished_scores = state[FINISHED_SCORES]
     finished_flags = state[FINISHED_FLAGS]
 
+    print('active_log_probs', active_log_probs)
+    print('finished_scores', finished_scores)
+    print('finished_flags', finished_flags)
+
     # active_log_probs are always negative, so the best scores of active seqs
     # are achieved when the length penalty is maximal
     # best_active_scores: [batch_size]
     max_length_norm = self._length_normalization(self._max_decode_length)
     best_active_scores = active_log_probs[:, 0] / max_length_norm  
+    print('best_active_scores', best_active_scores)
 
     # if there are no finished seqs in a batch, set the worst finished score to 
     # negative infinity for that batch
     # finished_batch_flags: [batch_size], True if any beam is finished
     # worst_finished_scores: [batch_size]
     finished_batch_flags = tf.reduce_any(finished_flags, 1)
+    print('finished_batch_flags', finished_batch_flags)
     worst_finished_scores = tf.reduce_min(finished_scores, axis=1)
+    print('worst_finished_scores', worst_finished_scores)
     worst_finished_scores = tf.where(
         finished_batch_flags, worst_finished_scores, NEG_INF)
-       
+    print('worst_finished_scores', worst_finished_scores)       
+
     worst_finished_better_than_best_active = tf.reduce_all(
         tf.greater(worst_finished_scores, best_active_scores))
+    print('worst_finished_better_than_best_active', worst_finished_better_than_best_active)
+    print('def continue_search ### \n\n')
     return tf.logical_and(
         tf.less(i, self._max_decode_length), 
         tf.logical_not(worst_finished_better_than_best_active))
@@ -297,8 +327,31 @@ class BeamSearch(object):
         with updated tensors. 
     """
     new_seq, new_log_probs, new_cache = self._grow_active_seq(state)
+
+    print('### def get_new_active_state')
+    print('new_seq', new_seq)
+    print('new_log_probs', new_log_probs)
+    print('new_cache', new_cache['layer_0']['k'].shape, new_cache['layer_0']['v'].shape, new_cache['layer_0']['tgt_tgt_attention'].shape, new_cache['layer_0']['tgt_src_attention'].shape, new_cache['encoder_outputs'].shape, new_cache['padding_mask'].shape)
     active_state = self._get_new_active_state(new_seq, new_log_probs, new_cache)
+    print('... ...')
+    print('active_state[ACTIVE_SEQ]', active_state[ACTIVE_SEQ])
+    print('active_state[ACTIVE_LOG_PROBS]', active_state[ACTIVE_LOG_PROBS])
+    print('active_state[ACTIVE_CACHE]', active_state[ACTIVE_CACHE]['layer_0']['k'].shape, active_state[ACTIVE_CACHE]['layer_0']['v'].shape, active_state[ACTIVE_CACHE]['layer_0']['tgt_tgt_attention'].shape, active_state[ACTIVE_CACHE]['layer_0']['tgt_src_attention'].shape, active_state[ACTIVE_CACHE]['encoder_outputs'].shape, active_state[ACTIVE_CACHE]['padding_mask'].shape)
+    print('def get_new_active_state ###\n\n')
+
+
+    print('### def get_new_finished_state')
+    print('state[FINISHED_SEQ]', state[FINISHED_SEQ])
+    print('state[FINISHED_SCORES]', state[FINISHED_SCORES])
+    print('state[FINISHED_FLAGS]', state[FINISHED_FLAGS])
+    print('new_seq', new_seq)
+    print('new_log_probs', new_log_probs)
     finished_state = self._get_new_finished_state(state, new_seq, new_log_probs)
+    print('finished_state[FINISHED_SEQ]', finished_state[FINISHED_SEQ])
+    print('finished_state[FINISHED_SCORES]', finished_state[FINISHED_SCORES])
+    print('finished_state[FINISHED_FLAGS]', finished_state[FINISHED_FLAGS])
+    print('def get_new_finished_state ###\n\n')
+
 
     new_state = {CUR_INDEX: state[CUR_INDEX] + 1}
     new_state.update(active_state)
@@ -341,6 +394,7 @@ class BeamSearch(object):
           'tgt_src_attention': tensor of shape [batch_size, doubled_beam_width, 
             num_heads, cur_index + 1, src_seq_len].
     """
+    print('### def grow_active_seq')
     i = state[CUR_INDEX]
     # active_seq: [batch_size, beam_width, cur_index + 1]
     # active_log_probs: [batch_size, beam_width]
@@ -356,62 +410,85 @@ class BeamSearch(object):
     active_seq = state[ACTIVE_SEQ]
     active_log_probs = state[ACTIVE_LOG_PROBS]
     active_cache = state[ACTIVE_CACHE]
+    print('i', state[CUR_INDEX])
+    print('active_seq', state[ACTIVE_SEQ])
+    print('active_log_probs', state[ACTIVE_LOG_PROBS])
+    print('active_cache', state[ACTIVE_CACHE]['layer_0']['k'].shape, state[ACTIVE_CACHE]['layer_0']['v'].shape, state[ACTIVE_CACHE]['layer_0']['tgt_tgt_attention'].shape, state[ACTIVE_CACHE]['layer_0']['tgt_src_attention'].shape, state[ACTIVE_CACHE]['encoder_outputs'].shape, state[ACTIVE_CACHE]['padding_mask'].shape)
 
     # flattening
     # for `active_seq` and `active_cache`, do reshaping
     # [batch_size, beam_width, ...] ==> [batch_size * beam_width, ...]
     flat_active_seq = _flatten_beam_dim(active_seq)
+    print('flat_active_seq', flat_active_seq)
     flat_cache = map_structure(_flatten_beam_dim, active_cache)
+    print('flat_cache', flat_cache['layer_0']['k'].shape, flat_cache['layer_0']['v'].shape, flat_cache['layer_0']['tgt_tgt_attention'].shape, flat_cache['layer_0']['tgt_src_attention'].shape, flat_cache['encoder_outputs'].shape, flat_cache['padding_mask'].shape)
 
     # flat_logits: [batch_size * beam_width, vocab_size]
     # the `cur_index` of `k`, `v`, `tgt_tgt_attention`, `tgt_src_attention` 
     # tensors  in `flat_cache` are incremented 
     flat_logits, flat_cache = self._decoding_fn(
         flat_active_seq[:, -1:], flat_cache, index=i)
+    print('flat_logits', flat_logits)
+    print('flat_cache', flat_cache['layer_0']['k'].shape, flat_cache['layer_0']['v'].shape, flat_cache['layer_0']['tgt_tgt_attention'].shape, flat_cache['layer_0']['tgt_src_attention'].shape, flat_cache['encoder_outputs'].shape, flat_cache['padding_mask'].shape)
 
     # SOS should be excluded from the space of valid output tokens, so we push
     # the logits of SOS_ID to -inf so that SOS will never appear in the decoded 
     # sequence 
     sos_mask = tf.constant(
         [1] + [0] * (self._vocab_size - 1), dtype='float32') * NEG_INF 
+    print('sos_mask', sos_mask)
     flat_logits += sos_mask
+    print('flat_logits', flat_logits)
 
     # unflattening
     # logits: [batch_size, beam_width, vocab_size]
     # tensors in `new_cache` now have shape [batch_size, beam_width, ...]
     logits = _unflatten_beam_dim(
         flat_logits, self._batch_size, self._beam_width)
+    print('logits', logits)
     new_cache = map_structure(
         lambda t: _unflatten_beam_dim(t, self._batch_size, self._beam_width),
         flat_cache)
+    print('new_cache', new_cache['layer_0']['k'].shape, new_cache['layer_0']['v'].shape, new_cache['layer_0']['tgt_tgt_attention'].shape, new_cache['layer_0']['tgt_src_attention'].shape, new_cache['encoder_outputs'].shape, new_cache['padding_mask'].shape)
 
     # convert logits to log probs
     candidate_log_probs = logits - tf.reduce_logsumexp(
         logits, axis=2, keepdims=True) 
-
+    print('candidate_log_probs', candidate_log_probs)
     # log_probs: [batch_size, beam_width, vocab_size]
     log_probs = candidate_log_probs + tf.expand_dims(active_log_probs, axis=2)
-
+    print('log_probs', log_probs)
     flat_log_probs = tf.reshape(log_probs,
                                 [-1, self._beam_width * self._vocab_size])
-
+    print('flat_log_probs', flat_log_probs)
     # top_log_probs, topk_indices: [batch_size, doubled_beam_width]
     topk_log_probs, topk_indices = tf.nn.top_k(
         flat_log_probs, k=self._doubled_beam_width)
-
+    print('topk_log_probs', topk_log_probs, 'topk_indices', topk_indices)
     # get the beam indices for the top `doubled_beam_width` candidates 
     topk_beam_indices = topk_indices // self._vocab_size
-  
+    print('topk_beam_indices', topk_beam_indices)
     # topk_seq: [batch_size, doubled_beam_width, cur_index + 1]
     # tensors in `new_cache` now have shape [batch_size, doubled_beam_width,...]
+
+    print('### def gather_beams')
+    print('active_seq', active_seq)
+    print('new_cache', new_cache['layer_0']['k'].shape, new_cache['layer_0']['v'].shape, new_cache['layer_0']['tgt_tgt_attention'].shape, new_cache['layer_0']['tgt_src_attention'].shape, new_cache['encoder_outputs'].shape, new_cache['padding_mask'].shape)
     topk_seq, new_cache = _gather_beams(
         [active_seq, new_cache], topk_beam_indices)
+    print('... ...')
+    print('topk_seq', topk_seq)
+    print('new_cache', new_cache['layer_0']['k'].shape, new_cache['layer_0']['v'].shape, new_cache['layer_0']['tgt_tgt_attention'].shape, new_cache['layer_0']['tgt_src_attention'].shape, new_cache['encoder_outputs'].shape, new_cache['padding_mask'].shape)
+    print('def gather_beams ###\n\n')    
 
     # append the top `doubled_beam_width` ids (`topk_ids`) to the growing active 
     # seqs (`topk_seq`)
     # topk_ids: [batch_size, doubled_beam_width]
     topk_ids = tf.expand_dims(topk_indices % self._vocab_size, axis=2)
+    print('topk_ids', topk_ids)
     topk_seq = tf.concat([topk_seq, topk_ids], axis=2)
+    print('topk_seq', topk_seq)
+    print('def grow_active_seq ###\n\n')
     return topk_seq, topk_log_probs, new_cache
 
   def _get_new_active_state(self, new_seq, new_log_probs, new_cache):
@@ -436,9 +513,22 @@ class BeamSearch(object):
     """
     # [batch_size, doubled_beam_width]
     new_active_flags = tf.logical_not(tf.equal(new_seq[:, :, -1], self._eos_id))
+
+    print('### def gather_topk')
+    print('new_seq', new_seq)
+    print('new_log_probs', new_log_probs)
+    print('new_active_flags', new_active_flags)
+    print('new_cache', new_cache['layer_0']['k'].shape, new_cache['layer_0']['v'].shape, new_cache['layer_0']['tgt_tgt_attention'].shape, new_cache['layer_0']['tgt_src_attention'].shape, new_cache['encoder_outputs'].shape, new_cache['padding_mask'].shape)
+    print('k', self._beam_width)
+    print('... ...')
     top_active_seq, top_active_log_probs, top_active_cache = _gather_topk(
         [new_seq, new_log_probs, new_cache], 
         new_log_probs, new_active_flags, self._beam_width)
+    print('top_active_seq', top_active_seq)
+    print('top_active_log_probs', top_active_log_probs)
+    print('top_active_cache', top_active_cache['layer_0']['k'].shape, top_active_cache['layer_0']['v'].shape, top_active_cache['layer_0']['tgt_tgt_attention'].shape, top_active_cache['layer_0']['tgt_src_attention'].shape, top_active_cache['encoder_outputs'].shape, top_active_cache['padding_mask'].shape)
+
+    print('def gather_topk ###\n\n')
 
     return {ACTIVE_SEQ: top_active_seq,
             ACTIVE_LOG_PROBS: top_active_log_probs,
@@ -471,14 +561,14 @@ class BeamSearch(object):
     # zero-pad the previously finished seqs to shape 
     # [batch_size, beam_width, cur_index + 2]
     finished_seq = tf.pad(finished_seq, [[0, 0], [0, 0], [0, 1]])
-
+    print('finished_seq(pad)', finished_seq)
     # convert log-probs to scores by length normalization
     new_scores = new_log_probs / self._length_normalization(i + 1)
-
+    print('new_scores(length normalized)', new_scores)
     # flag the newly finished seqs (if any)
     # [batch_size, doubled_beam_width]
     new_finished_flags = tf.equal(new_seq[:, :, -1], self._eos_id)
-
+    print('new_finished_flags', new_finished_flags)
     # combine previously finished seqs w/ those newly finished (if any)
     # finished_seq: [batch_size, beam_width * 3, cur_index + 2]
     # finished_scores: [batch_size, beam_width * 3]
@@ -487,10 +577,20 @@ class BeamSearch(object):
     finished_scores = tf.concat([finished_scores, new_scores], axis=1)
     finished_flags = tf.concat([finished_flags, new_finished_flags], axis=1)
 
+    print('### def gather_topk')
+    print('finished_seq', finished_seq)
+    print('finished_scores', finished_scores)
+    print('finished_flags', finished_flags)
+    print('k', self._beam_width)
+    print('... ...')
     top_finished_seq, top_finished_scores, top_finished_flags = _gather_topk(
         [finished_seq, finished_scores, finished_flags], 
         finished_scores, finished_flags, self._beam_width) 
-    
+    print('top_finished_seq', top_finished_seq)
+    print('top_finished_scores', top_finished_scores)
+    print('top_finished_flags', top_finished_flags)
+    print('def gather_topk ###\n\n')    
+
     return {FINISHED_SEQ: top_finished_seq,
             FINISHED_SCORES: top_finished_scores,
             FINISHED_FLAGS: top_finished_flags}
