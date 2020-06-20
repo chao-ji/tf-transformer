@@ -3,8 +3,8 @@
 This is a TensorFlow 2.x implementation of Transformer model ([Attention is all you need](https://arxiv.org/abs/1706.03762])) for Neural Machine Translation (NMT). 
 
 
-<p align="center ">
-  <img src="g3doc/images/teaser1.png" width="600">
+<p align="center">
+  <img src="g3doc/images/teaser2.png" width="600">
 
   <br>
   Self-Attention Mechanism. 
@@ -18,8 +18,8 @@ At the core of the Transformer model is the **Self Attention** mechanism used by
 
 
 
-<p align="center ">
-  <img src="g3doc/images/teaser2.png" width="600">
+<p align="center">
+  <img src="g3doc/images/teaser1.png" width="600">
 
   <br>
   Compute a new embedding matrix of **Query** by making it attend to *Reference*. When *Query* and *Reference* happen to be the same matrix, it ends up being **Self-Attention**
