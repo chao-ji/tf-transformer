@@ -48,8 +48,7 @@ class BeamSearch(object):
                beam_width,
                alpha,
                max_decode_length,
-               eos_id,
-               decoder_stack_size=6):
+               eos_id):
     """Constructor.
 
     Args:
@@ -70,8 +69,6 @@ class BeamSearch(object):
       max_decode_length: int scalar, the maximum number of steps to decode
         a sequence.
       eos_id: int scalar. ID of end of sentence token.
-      decoder_stack_size: int scalar, num of decoder layers in the transformer 
-        model.
     """
     self._decoding_fn = decoding_fn
     self._vocab_size = vocab_size
@@ -80,7 +77,6 @@ class BeamSearch(object):
     self._alpha = alpha
     self._max_decode_length = max_decode_length
     self._eos_id = eos_id
-    self._decoder_stack_size = decoder_stack_size
 
     self._doubled_beam_width = 2 * self._beam_width
     self._length_normalization = lambda length: tf.pow(

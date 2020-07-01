@@ -163,25 +163,6 @@ class LearningRateSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     return learning_rate
 
 
-def create_optimizer(learning_rate, beta1, beta2, epsilon):
-  """Creates Adam optimizer.
-
-  Args:
-    learning_rate: float scalar, base learning rate.
-    beta1: float scalar, beta1 parameter of Adam optimizer.
-    beta2: float scalar, beta2 parameter of Adam optimizer.
-    epsilon: float scalar, epsilon parameter of Adam optimizer.
-
-  Returns:
-    optimizer: an instance of tf.keras.optimizer.Adam. 
-  """
-  optimizer = tf.keras.optimizers.Adam(learning_rate, 
-                                       beta1, 
-                                       beta2, 
-                                       epsilon=epsilon)
-  return optimizer
-
-
 def save_attention_weights(filename, data):
   """Saves attention weights data to *.npy file.
 

@@ -812,8 +812,8 @@ class TransformerModel(tf.keras.Model):
                                 self._beam_width, 
                                 self._alpha, 
                                 max_decode_length, 
-                                EOS_ID,
-                                self._decoder._stack_size)
+                                EOS_ID)
+
     decoded_ids, scores, decoding_cache = bs.search(sos_ids, decoding_cache)
 
     tgt_tgt_attention = [
