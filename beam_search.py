@@ -124,8 +124,7 @@ class BeamSearch(object):
                       self._search_step, 
                       loop_vars=[state],
                       shape_invariants=[state_shapes],
-                      parallel_iterations=1))
-    finished_state = finished_state[0]
+                      parallel_iterations=1))[0]
 
     active_seqs = finished_state[ACTIVE_SEQ]
     active_log_probs = finished_state[ACTIVE_LOG_PROBS]
@@ -233,6 +232,7 @@ class BeamSearch(object):
         FINISHED_FLAGS:
             tf.TensorShape([None, self._beam_width])
     }
+    return state_shape_invariants
 
   def _continue_search(self, state):
     """Determines whether to keep searching or terminate.

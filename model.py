@@ -954,7 +954,7 @@ class TransformerModel(tf.keras.Model):
                                       cache=cache)
 
       logits = self._embedding_logits_layer(decoder_outputs, mode='logits')
-      logits = tf.squeeze(logits, axis=[1])
+      logits = tf.squeeze(logits, axis=1)
       return logits, cache
 
     return decoding_fn 
