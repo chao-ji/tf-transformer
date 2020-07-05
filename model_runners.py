@@ -1,5 +1,5 @@
-"""Defines Trainer and Evaluator class that wraps a Transformer model and 
-performs training and evaluation, respectively.
+"""Defines Trainer and Evaluator class that wraps a Sequence Transducer model 
+and performs training and evaluation, respectively.
 """
 import math
 import os
@@ -13,13 +13,13 @@ import utils
 from data import tokenization
 
 
-class TransformerTrainer(object):
-  """Trains a Transformer model."""
+class SequenceTransducerTrainer(object):
+  """Trains a SequenceTransducer model."""
   def __init__(self, model, label_smoothing):
     """Constructor.
 
     Args:
-      model: an instance of TransformerModel instance.
+      model: an instance of sequence transducer model.
       label_smoothing: float scalar, applies label smoothing to the one-hot 
         class labels. Positive class has prob mass 1 - `label_smoothing`, while 
         each negative class has prob mass `label_smoothing / num_neg_classes`.
@@ -34,6 +34,7 @@ class TransformerTrainer(object):
             ckpt_path,
             num_iterations,
             persist_per_iterations,
+            clip_norm=None,
             log_per_iterations=100,
             logdir='log'):
     """Performs training iterations.
@@ -54,9 +55,10 @@ class TransformerTrainer(object):
       logdir: string scalar, the directory that the tensorboard log data will
         be written to. 
     """ 
+    batch_size = dataset.element_spec[0].shape[0]
     train_step_signature = [
-        tf.TensorSpec(shape=(None, None), dtype=tf.int64),
-        tf.TensorSpec(shape=(None, None), dtype=tf.int64)]
+        tf.TensorSpec(shape=(batch_size, None), dtype=tf.int64),
+        tf.TensorSpec(shape=(batch_size, None), dtype=tf.int64)]
 
     @tf.function(input_signature=train_step_signature)
     def train_step(src_token_ids, tgt_token_ids):
@@ -88,6 +90,8 @@ class TransformerTrainer(object):
                                   self._model._vocab_size)
 
       gradients = tape.gradient(loss, self._model.trainable_variables)
+      if clip_norm is not None:
+        gradients, norm = tf.clip_by_global_norm(gradients, clip_norm)
       optimizer.apply_gradients(
           zip(gradients, self._model.trainable_variables))
 
@@ -122,13 +126,13 @@ class TransformerTrainer(object):
         break
 
 
-class TransformerEvaluator(object):
-  """Evaluates a Transformer model."""
+class SequenceTransducerEvaluator(object):
+  """Evaluates a sequence transducer model."""
   def __init__(self, model, subtokenizer, decode_batch_size, src_max_length):
     """Constructor.
 
     Args:
-      model: an instance of TransformerModel instance.
+      model: an instance of sequence transducer model. 
       subtokenizer: a SubTokenizer instance.
       decode_batch_size: int scalar, num of sequences in a batch to be decoded.
       src_max_length: int scalar, max length of decoded sequence.

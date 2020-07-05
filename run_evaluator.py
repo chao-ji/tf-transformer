@@ -7,7 +7,7 @@ from absl import flags
 
 from data import tokenization
 from model import TransformerModel
-from model_runners import TransformerEvaluator
+from model_runners import SequenceTransducerEvaluator
 
 
 flags.DEFINE_integer(
@@ -95,7 +95,7 @@ def main(_):
   ckpt.restore(latest_ckpt).expect_partial()
 
   # build evaluator
-  evaluator = TransformerEvaluator(
+  evaluator = SequenceTransducerEvaluator(
       model, subtokenizer, decode_batch_size, src_max_length)
 
   # translates input sequences, and optionally evaluates BLEU score if 

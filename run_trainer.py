@@ -11,7 +11,7 @@ import utils
 from data import dataset
 from data import tokenization
 from model import TransformerModel
-from model_runners import TransformerTrainer
+from model_runners import SequenceTransducerTrainer
 
 
 SUFFIX = '*.tfrecord'
@@ -108,7 +108,7 @@ def main(_):
                            dropout_rate=dropout_rate)
 
   # training dataset
-  builder = dataset.TransformerDatasetBuilder(
+  builder = dataset.DynamicBatchDatasetBuilder(
       max_num_tokens, True, max_length, num_parallel_calls)
   filenames = sorted(glob.glob(os.path.join(data_dir, SUFFIX)))
   train_ds = builder.build_dataset(filenames)
@@ -126,7 +126,7 @@ def main(_):
   ckpt = tf.train.Checkpoint(model=model, optimizer=optimizer)
 
   # build trainer and start training
-  trainer = TransformerTrainer(model, label_smoothing)
+  trainer = SequenceTransducerTrainer(model, label_smoothing)
   trainer.train(
       train_ds, optimizer, ckpt, model_dir, num_steps, save_ckpt_per_steps)
 

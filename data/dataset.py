@@ -1,4 +1,4 @@
-"""Defines Transformer dataset builder."""
+"""Defines Sequence Transduction dataset builder."""
 import os
 
 import tensorflow as tf
@@ -15,7 +15,59 @@ _MIN_BOUNDARY = 8
 _BOUNDARY_SCALE = 1.1
 
 
-class TransformerDatasetBuilder(object):
+class BaseSequenceTransductionDatasetBuilder(object):
+  """Abstract base class for building sequence transduction dataset.
+
+  A sequence transduction dataset produces int 2-tuples of tensors of shape 
+  ([batch_size, src_seq_len], [batch_size, tgt_seq_len]), holding the 
+  zero-padded token ids for batched source and target sequences. Depending
+  on the batching scheme, the subclass `DynamicBatchDatasetBuilder` and
+  `StaticBatchDatasetBuilder` produces tensors with *dynamic* or *static*
+  `batch_size`.
+  """
+  def build_dataset(self, filenames):
+    """Builds the sequence transduction dataset.
+
+    Args:
+      filenames: a list of strings, names of TFRecord files. 
+
+    Returns:
+      dataset: a tf.data.Dataset instance, each item is a tuple of two tensors
+        of shape [batch_size, src_seq_len] and [batch_size, tgt_seq_len], 
+        holding the token ids in source or target sequences. Each row is 
+        zero-padded to the length of the longest sequence in each batch, so
+        the last column contains at least one non-zero (padded) token.
+    """
+    # shape: ()
+    dataset = tf.data.Dataset.from_tensor_slices(filenames).shuffle(
+        len(filenames), seed=self._random_seed)
+
+    # set `options.experimental_deterministic` to False to shuffle the dataset 
+    # shape: ()
+    options = tf.data.Options()
+    options.experimental_deterministic = False if self._shuffle else True
+    dataset = dataset.interleave(
+        lambda filename: tf.data.TFRecordDataset(
+            filename, buffer_size=_READ_RECORD_BUFFER),
+        cycle_length=self._num_parallel_calls,
+        num_parallel_calls=tf.data.experimental.AUTOTUNE).with_options(options)
+
+    # shape: ((None,), (None,))
+    dataset = dataset.map(
+        _parse_example, num_parallel_calls=self._num_parallel_calls)
+
+    # filter out long sequences
+    dataset = dataset.filter(lambda x, y: tf.logical_and(
+        tf.size(x) <= self._max_length,
+        tf.size(y) <= self._max_length))
+
+    dataset = self._batch_examples(dataset)
+    dataset = dataset.repeat(-1)
+    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    return dataset
+
+
+class DynamicBatchDatasetBuilder(BaseSequenceTransductionDatasetBuilder):
   """Builds a tf.data.Dataset instance that reads, zero-pads and batches source 
   and target token ids from pre-generated TFRecord files.
 
@@ -49,47 +101,6 @@ class TransformerDatasetBuilder(object):
     self._num_parallel_calls = num_parallel_calls
     self._random_seed = random_seed
     
-  def build_dataset(self, filenames):
-    """Builds the Transformer dataset.
-
-    Args:
-      filenames: a list of strings, names of TFRecord files. 
-
-    Returns:
-      dataset: a tf.data.Dataset instance, each item is a tuple of two tensors
-        of shape [batch_size, src_seq_len] and [batch_size, tgt_seq_len], 
-        holding the token ids in source or target sequences. Each row is 
-        zero-padded to the length of the longest sequence in each batch, so
-        the last column contains at least one non-zero (padded) token.
-    """
-    # shape: ()
-    dataset = tf.data.Dataset.from_tensor_slices(filenames).shuffle(
-        len(filenames), seed=self._random_seed) 
-
-    # set `options.experimental_deterministic` to False to shuffle the dataset 
-    # shape: ()
-    options = tf.data.Options()
-    options.experimental_deterministic = False if self._shuffle else True
-    dataset = dataset.interleave(
-        lambda filename: tf.data.TFRecordDataset(
-            filename, buffer_size=_READ_RECORD_BUFFER),
-        cycle_length=self._num_parallel_calls,
-        num_parallel_calls=tf.data.experimental.AUTOTUNE).with_options(options)
-
-    # shape: ((None,), (None,))
-    dataset = dataset.map(
-        _parse_example, num_parallel_calls=self._num_parallel_calls)
-
-    # filter out long sequences
-    dataset = dataset.filter(lambda x, y: tf.logical_and(
-        tf.size(x) <= self._max_length, 
-        tf.size(y) <= self._max_length))
-
-    dataset = self._batch_examples(dataset)
-    dataset = dataset.repeat(-1)
-    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    return dataset
-
   def _batch_examples(self, dataset):
     """Batches the sequence pairs using dynamic batching scheme.
 
@@ -171,6 +182,81 @@ class TransformerDatasetBuilder(object):
     buckets_lower_bound = [0] + bucket_boundaries
     buckets_upper_bound = bucket_boundaries + [self._max_length + 1]
     return buckets_lower_bound, buckets_upper_bound
+
+
+class StaticBatchDatasetBuilder(BaseSequenceTransductionDatasetBuilder):
+  """Builds a tf.data.Dataset instance that reads, zero-pads and batches source 
+  and target token ids from pre-generated TFRecord files.
+
+  Note: The produced dataset adopts the static batching scheme -- the source
+  and target token id matrices have shape [batch_size, seq_len] where 
+  `batch_size` is fixed across different minibatches.
+  """
+  def __init__(self,
+               batch_size,
+               shuffle,
+               max_length,
+               num_parallel_calls,
+               num_buckets=8,
+               bucket_width=10,
+               random_seed=None):
+    """Constructor.
+
+    Args:
+      shuffle: bool scalar, if False, the training examples will be generated
+        deterministically. 
+      max_length: int scalar, source or target seqs longer than this will be
+        filtered out.
+      num_parallel_calls: int scalar, num of TFRecord files to be processed
+        concurrently. 
+      num_buckets: int scalar, num of sequence length buckets.
+      bucket_width: int scalar, size of each sequence length bucket.
+      random_seed: int scalar, random seed.
+    """
+    self._batch_size = batch_size
+    self._shuffle = shuffle
+    self._max_length = max_length
+    self._num_parallel_calls = num_parallel_calls
+    self._num_buckets = num_buckets
+    self._bucket_width = bucket_width
+    self._random_seed = random_seed
+
+  def _batch_examples(self, dataset):
+    """Batches the sequence pairs using dynamic batching scheme.
+
+    Args:
+      dataset: a tf.data.Dataset instance, each item is a tuple of two int 
+        tensors of shape [src_seq_len] and [tgt_seq_len].
+
+    Returns:
+      a tf.data.Dataset instance, each item is a tuple of two int tensors of 
+        shape [batch_size, src_seq_len] and [batch_size, tgt_seq_len].
+    """
+    # mapper
+    def example_to_bucket_id(src_token_ids, tgt_token_ids):
+      """Maps source and target sequence to bucket id.
+
+      Args:
+        src_token_ids: int tensor of shape [src_seq_len].
+        tgt_token_ids: int tensor of shape [tgt_seq_len].
+
+      Returns:
+        bucket_id: int scalar tensor.
+      """
+      seq_len = tf.maximum(tf.size(src_token_ids), tf.size(tgt_token_ids))
+      bucket_id = seq_len // self._bucket_width
+      return tf.cast(tf.minimum(self._num_buckets - 1, bucket_id), 'int64')
+
+    # reducer
+    def batching_fn(bucket_id, grouped_dataset):
+      """Maps key and dataset to dataset"""
+      return grouped_dataset.padded_batch(
+          self._batch_size, ([None], [None]), drop_remainder=True)
+
+    return dataset.apply(tf.data.experimental.group_by_window(
+        key_func=example_to_bucket_id,
+        reduce_func=batching_fn,
+        window_size=self._batch_size))
 
 
 def _parse_example(serialized_example):
