@@ -26,6 +26,15 @@ At the core of the Transformer model is the **Self Attention** mechanism used by
 </p>
 
 
+<p align="center">
+  <img src="g3doc/images/encoder_layer.png" width="350">
+  <img src="g3doc/images/decoder_layer.png" width="350">
+  <img src="g3doc/images/encoder.png" width="350">
+  <img src="g3doc/images/decoder.png" width="350">
+
+  <br>
+  Transformer Network Architecture.
+</p>
 
 ## Requirements
 This implementation is based on TensorFlow 2.x and Python3. In addition, NLTK is required to compute BLEU score for evaluation.
