@@ -1,6 +1,3 @@
-[submodule "nlp_toolkit"]
-	path = nlp_toolkit
-	url = https://github.com/chao-ji/nlp_toolkit.git
 [submodule "data"]
 	path = data
 	url = https://github.com/chao-ji/nlp_toolkit.git
