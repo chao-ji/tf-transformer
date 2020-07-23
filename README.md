@@ -27,10 +27,10 @@ At the core of the Transformer model is the **Self Attention** mechanism used by
 
 
 <p align="center">
-  <img src="g3doc/images/encoder_layer.png" width="350">
-  <img src="g3doc/images/decoder_layer.png" width="350">
-  <img src="g3doc/images/encoder.png" width="350">
-  <img src="g3doc/images/decoder.png" width="350">
+  <img src="g3doc/images/encoder_layer.png" width="600">
+  <img src="g3doc/images/decoder_layer.png" width="600">
+  <img src="g3doc/images/encoder.png" width="600">
+  <img src="g3doc/images/decoder.png" width="600">
 
   <br>
   Transformer Network Architecture.
@@ -45,6 +45,12 @@ You can clone this repository by running
 
 ```bash
 git clone git@github.com:chao-ji/tf-transformer.git
+```
+
+Then clone & update the submodule by running
+```bash
+cd tf-transformer
+git submodule update --init --recursive
 ```
 
 ## Data Preparation
