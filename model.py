@@ -1,12 +1,12 @@
 """Defines Transformer model in tf.keras API."""
 import tensorflow as tf
 
-import beam_search 
 import utils
 
 from data.tokenization import SOS_ID
 from data.tokenization import EOS_ID
-from beam_search import NEG_INF
+from data.beam_search import NEG_INF
+from data import beam_search
 
 
 class Projection(tf.keras.layers.Layer):
