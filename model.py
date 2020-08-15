@@ -3,10 +3,10 @@ import tensorflow as tf
 
 import utils
 
-from data.tokenization import SOS_ID
-from data.tokenization import EOS_ID
-from data.beam_search import NEG_INF
-from data import beam_search
+from commons.tokenization import SOS_ID
+from commons.tokenization import EOS_ID
+from commons.beam_search import NEG_INF
+from commons import beam_search
 
 
 class Projection(tf.keras.layers.Layer):

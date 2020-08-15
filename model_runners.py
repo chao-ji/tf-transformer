@@ -9,8 +9,8 @@ import numpy as np
 import tensorflow as tf
 from nltk.translate.bleu_score import corpus_bleu
 
-import utils
-from data import tokenization
+from commons import utils
+from commons import tokenization
 
 
 class SequenceTransducerTrainer(object):

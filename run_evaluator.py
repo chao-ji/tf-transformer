@@ -5,7 +5,7 @@ import tensorflow as tf
 from absl import app
 from absl import flags
 
-from data import tokenization
+from commons import tokenization
 from model import TransformerModel
 from model_runners import SequenceTransducerEvaluator
 

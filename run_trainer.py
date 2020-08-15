@@ -7,9 +7,9 @@ import tensorflow as tf
 from absl import app
 from absl import flags
 
-import utils
-from data import dataset
-from data import tokenization
+from commons import utils
+from commons import dataset
+from commons import tokenization
 from model import TransformerModel
 from model_runners import SequenceTransducerTrainer
 
