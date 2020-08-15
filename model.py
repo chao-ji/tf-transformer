@@ -2,7 +2,6 @@
 import tensorflow as tf
 
 import utils
-
 from commons.tokenization import SOS_ID
 from commons.tokenization import EOS_ID
 from commons.beam_search import NEG_INF

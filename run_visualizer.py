@@ -5,7 +5,6 @@ from absl import app
 from absl import flags
 
 from commons import tokenization
-
 from commons.tokenization import SOS_ID
 from commons.tokenization import EOS_ID
 
