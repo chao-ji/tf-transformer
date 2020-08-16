@@ -92,6 +92,9 @@ def main(_):
 
   ckpt = tf.train.Checkpoint(model=model)
   latest_ckpt = tf.train.latest_checkpoint(model_dir)
+  if latest_ckpt is None:
+      raise ValueError('No checkpoint is found in %s' % model_dir)
+  print('Loaded latest checkpoint ', latest_ckpt)
   ckpt.restore(latest_ckpt).expect_partial()
 
   # build evaluator

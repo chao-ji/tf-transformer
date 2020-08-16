@@ -1,3 +1,0 @@
-[submodule "data"]
-	path = commons
-	url = https://github.com/chao-ji/nlp_toolkit.git
