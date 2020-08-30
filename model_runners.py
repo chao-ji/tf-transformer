@@ -10,6 +10,7 @@ import tensorflow as tf
 from nltk.translate.bleu_score import corpus_bleu
 
 from commons import utils
+from commons import layers
 from commons import tokenization
 
 
@@ -84,10 +85,10 @@ class SequenceTransducerTrainer(object):
         # 0, s1, s2, ..., sn
         tgt_token_ids_input = tf.pad(tgt_token_ids, [[0, 0], [1, 0]])[:, :-1]
         logits = self._model(src_token_ids, tgt_token_ids_input, training=True)
-        loss = utils.compute_loss(tgt_token_ids, 
-                                  logits, 
-                                  self._label_smoothing, 
-                                  self._model._vocab_size)
+        loss = layers.compute_loss(tgt_token_ids, 
+                                   logits, 
+                                   self._label_smoothing, 
+                                   self._model._vocab_size)
 
       gradients = tape.gradient(loss, self._model.trainable_variables)
       if clip_norm is not None:
