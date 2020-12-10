@@ -51,6 +51,8 @@ class SequenceTransducerTrainer(object):
       num_iterations: int scalar, num of iterations to train the model.
       persist_per_iterations: int scalar, saves weights to checkpoint files
         every `persist_per_iterations` iterations.
+      clip_norm: float scalar, the value that the norm of gradient will be 
+        clipped to.
       log_per_iterations: int scalar, prints log info every `log_per_iterations`
         iterations.
       logdir: string scalar, the directory that the tensorboard log data will
