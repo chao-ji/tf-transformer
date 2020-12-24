@@ -67,7 +67,7 @@ source_file_n.txt   target_file_n.txt
 
 First you need to convert raw text files into TFRecord files by running
 ```bash
-python commons/tfrecord.py \
+python commons/create_tfrecord_machine_translation.py \
   --source_filenames=source_file_1.txt,source_file_2.txt,...,source_file_2.txt \
   --target_filenames=target_file_1.txt,target_file_2.txt,...,target_file_2.txt \
   --output_dir=/path/to/tfrecord/directory \
@@ -77,7 +77,7 @@ Note: this process involves "learning" a vocabulary of subword tokens from the t
 
 For detailed usage info, run
 ```bash
-python commons/tfrecord.py --help
+python commons/create_tfrecord_machine_translation.py --help
 ``` 
 
 For sample data, refer to [data\_sources.txt](data_sources.txt)
