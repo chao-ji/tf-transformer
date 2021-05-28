@@ -392,7 +392,7 @@ class Decoder(tf.keras.layers.Layer):
     return outputs
 
 
-class TransformerModel(tf.keras.Model):
+class TransformerModel(tf.keras.layers.Layer):
   """Transformer model as described in https://arxiv.org/abs/1706.03762
 
   The model implements methods `call` and `transduce`, where

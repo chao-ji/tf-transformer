@@ -46,23 +46,23 @@ def get_look_ahead_mask(seq_len):
   return mask
 
 
-def get_positional_encoding(seq_len, hidden_size):
+def get_positional_encoding(seq_len, hidden_size, reverse=False):
   """Creates a tensor that encodes positional information.
 
   Args:
     seq_len: int scalar tensor, sequence length.
     hidden_size: int scalar, the hidden size of continuous representation. 
+    reverse: bool, whether to reverse the sequence. Defaults to False.
 
   Returns:
     positional_encoding: float tensor of shape [seq_len, hidden_size], the 
       tensor that encodes positional information.
   """
-  positions = tf.cast(tf.range(seq_len), 'float32')
+  distances = tf.cast(tf.range(seq_len), 'float32')
   hidden_size //= 2
-  log_increment = tf.math.log(10000.) / (tf.cast(hidden_size, 'float32') - 1)
-  depths = tf.exp(tf.cast(tf.range(hidden_size), 'float32') * -log_increment)
-  
-  positional_encoding = tf.expand_dims(positions, 1) * tf.expand_dims(depths, 0)
-  positional_encoding = tf.concat([tf.sin(positional_encoding), 
+  inverse_frequencies = 1 / (
+      10000 ** (tf.cast(tf.range(hidden_size), 'float32') / (hidden_size - 1)))
+  positional_encoding = tf.einsum('i,j->ij', distances, inverse_frequencies)
+  positional_encoding = tf.concat([tf.sin(positional_encoding),
                                    tf.cos(positional_encoding)], axis=1)
   return positional_encoding
