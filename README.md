@@ -4,25 +4,22 @@ This is a TensorFlow 2.x implementation of Transformer model ([Attention is all 
 
 
 <p align="center">
-  <img src="g3doc/images/teaser2.png" width="600">
-
-  <br>
-  Self-Attention Mechanism. 
-</p>
-
-
-## Transformer Model
-Transformer is a novel yet simple network architecture for sequence modeling. Unlike other neural sequence modeling approaches where it is *taken for granted* that the network by itself (like LSTM) is capable of capturing the symbol-to-symbol dependence relationship, Transformer is designed to *explicitly* model the dependency by computing by how much a symbol should *attend* to other symbols.
-
-At the core of the Transformer model is the **Self Attention** mechanism used by its *Encoder* module where the goal is to compute a new representation of each symbol in a sequence by making it "*pay attention*" to other symbols within its context. Specifically, given a sequence `S[1], s[2], ...,S[n]`, each symbol `S[i]` (represented as an embedding vector) is first transformed into three vectors, namely the `query`, the `key`, and the `value`. Then a new representation of `S[i]` is computed as the average of the `value` vectors across each `S[j]` in `S`, weighted by the similarity between the `query` of `S[i]` and the `key` of `S[j]`. Because the similarity is simply computed as the dot product between two vectors, one can flexibly model the dependence between any two symbols regardless of how far apart they are. This property of self attention lends itself nicely to modeling long-distance dependence relationships that are otherwise difficult to model (e.g. if we were to use RNN or CNN), and it has inspired recent breakthroughs in methods of language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
-
-
-
-<p align="center">
   <img src="g3doc/images/teaser1.png" width="600">
 
   <br>
-  Compute a new embedding matrix of Query by making it attend to Reference. It ends up being Self-Attention when Query and Reference happen to be the same matrix.
+  Upper: the context for RNN is a single vector; Lower: the context for Transformer is a sequence of indexed vectors.
+</p>
+
+## Transformer Model
+Transformer is a deep neural network architecture for sequence modeling, which is the task to estimate the likelihood of tokens in a sequence based on their positions and context. While Recurrent Neural Networks collapse the embeddings of the entire span of context tokens into a single vector, Transformer has access to the embedding vector of each individual context token, no matter how far apart they are from each other. This makes it well suited for modeling long-distance dependence relationships, which is key to recent breakthroughs in methods for language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
+
+At the core of Transformer is the **Self-Attention** mechanism, where the goal is to compute a *contextualized* representation of each token in a sequence by letting them "pay attention" to each other. Given the initial vector representations `e[i]` for all positions `i`, it first applies linear projections to obtain vectors `q[i]`, `k[i]`, 'v[i]', where `k[i]` and `v[i]` play the role of the *key* and *value* of a knowledge base about the content of the sequence, which is to be examined by the *query* `q[i]` that is derived from the very *same* sequence. The outcome of the query is simply the dot-products between the `q`'s and `k`'s, which are used as weights to compute a weighted average of the `v`'s as the new representation of `e[i]`.
+
+<p align="center">
+  <img src="g3doc/images/teaser2.png" width="600">
+
+  <br>
+  Self-Attention mechanism. 
 </p>
 
 
