@@ -4,19 +4,19 @@ This is a TensorFlow 2.x implementation of Transformer model ([Attention is all 
 
 
 <p align="center">
-  <img src="g3doc/images/teaser1.png" width="600">
+  <img src="g3doc/images/teaser1.png" width="800">
 
   <br>
-  Upper: the context for RNN is a single vector; Lower: the context for Transformer is a sequence of indexed vectors.
+  Transformer has a more flexible way of representing the context compared with RNN.
 </p>
 
 ## Transformer Model
-Transformer is a deep neural network architecture for sequence modeling, which is the task to estimate the likelihood of tokens in a sequence based on their positions and context. While Recurrent Neural Networks collapse the embeddings of the entire span of context tokens into a single vector, Transformer has access to the embedding vector of each individual context token, no matter how far apart they are from each other. This makes it well suited for modeling long-distance dependence relationships, which is key to recent breakthroughs in methods for language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
+Transformer is a deep neural network architecture for sequence modeling, which is the task to estimate the likelihood of tokens in a sequence based on their textual context. While Recurrent Neural Networks collapse the embeddings of the entire history of context tokens into a single vector, Transformer has access to the embedding vector of each individual token, no matter how far the context spans. This makes it well suited for modeling long-distance dependence relationships, which is key to recent breakthroughs in methods for text representation learning such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
 
-At the core of Transformer is the **Self-Attention** mechanism, where the goal is to compute a *contextualized* representation of each token in a sequence by letting them "pay attention" to each other. Given the initial vector representations `e[i]` for all positions `i`, it first applies linear projections to obtain vectors `q[i]`, `k[i]`, `v[i]`, where `k[i]` and `v[i]` play the role of the *key* and *value* of a knowledge base about the content of the sequence, which is to be examined by the *query* `q[i]` that is derived from the very *same* sequence. The outcome of the query is simply the dot-products between the `q`'s and `k`'s, which are used as weights to compute a weighted average of the `v`'s as the new representation of `e[i]`.
+At the core of Transformer is the **Self-Attention** mechanism, where the goal is to compute a *contextualized* representation of each token in a sequence by letting them "pay attention" to each other. Given the initial vector representations `e[i]` for all positions `i`, it first applies linear projections to obtain vectors `q[i]`, `k[i]`, `v[i]`, where `k`'s and `v`'s play the role of the *key* and *value* of a knowledge base about the sequence content, which is to be *queried* by `q[i]` to determine which tokens are most similar to the token at index `i`. The outcome of the query is simply the similarity scores between `q[i]` and `k`'s (typically dot-products), which are used as weights to compute a weighted average of the `v`'s as the new representation of `e[i]`. Note that `q`, `k` and `v` are derived from the *same* sequence, meaning the sequence is effectively querying itself (hence the name Self-Attention).
 
 <p align="center">
-  <img src="g3doc/images/teaser2.png" width="600">
+  <img src="g3doc/images/teaser2.png" width="800">
 
   <br>
   Self-Attention mechanism. 
