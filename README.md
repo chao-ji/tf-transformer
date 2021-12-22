@@ -4,30 +4,22 @@ This is a TensorFlow 2.x implementation of Transformer model ([Attention is all 
 
 
 <p align="center">
-  <img src="g3doc/images/teaser2.png" width="600">
+  <img src="g3doc/images/teaser1.png" width="800">
 
   <br>
-  Self-Attention Mechanism.
+  Transformer has a more flexible way of representing the context compared with RNN.
 </p>
 
-
 ## Transformer Model
-Transformer is a deep neural network architecture for sequence modeling, which is the task to estimate the likelihood of tokens in a sequence given their position and context. Unlike Recurrent Neural Networks that represent the entire history of context tokens in a single embedding vector `h`, Transformer has access to the token embedding vectors `e[i]` for all positions `i`, and it explicitly computes the weight by which each `e[i]` should contribute to `e[j]`, regardless of how far `i` is away from the current position `j`. This property makes Transformer well suited for modeling long-distance dependence relationships, and it has inspired recent breakthroughs in methods of language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
+Transformer is a deep neural network architecture for sequence modeling, which is the task to estimate the likelihood of tokens in a sequence based on their textual context. While Recurrent Neural Networks collapse the embeddings of the entire history of context tokens into a single vector, Transformer has access to the embedding vector of each individual token, no matter how far the context spans. This makes it well suited for modeling long-distance dependence relationships, which is key to recent breakthroughs in methods for text representation learning such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
 
-
-Below is the cartoon illustrating the core idea of Transformer -- attention mechanism.
-
-
-
-At the core of the Transformer model is the **Self Attention** mechanism used by its *Encoder* module where the goal is to compute a new representation of each symbol in a sequence by making it "*pay attention*" to other symbols within its context. Specifically, given a sequence `S[1], s[2], ...,S[n]`, each symbol `S[i]` (represented as an embedding vector) is first transformed into three vectors, namely the `query`, the `key`, and the `value`. Then a new representation of `S[i]` is computed as the average of the `value` vectors across each `S[j]` in `S`, weighted by the similarity between the `query` of `S[i]` and the `key` of `S[j]`. Because the similarity is simply computed as the dot product between two vectors, one can flexibly model the dependence between any two symbols regardless of how far apart they are. This property of self attention lends itself nicely to modeling long-distance dependence relationships that are otherwise difficult to model (e.g. if we were to use RNN or CNN), and it has inspired recent breakthroughs in methods of language model pretraining such as [BERT](https://arxiv.org/abs/1810.04805) and [GPT-2](https://openai.com/blog/better-language-models/).
-
-
+At the core of Transformer is the **Self-Attention** mechanism, where the goal is to compute a *contextualized* representation of each token in a sequence by letting them "pay attention" to each other. Given the initial vector representations `e[i]` for all positions `i`, it first applies linear projections to obtain vectors `q[i]`, `k[i]`, `v[i]`, where `k`'s and `v`'s play the role of the *key* and *value* of a knowledge base about the sequence content, which is to be *queried* by `q[i]` to determine which tokens are most similar to the token at index `i`. The outcome of the query is simply the similarity scores between `q[i]` and `k`'s (typically dot-products), which are used as weights to compute a weighted average of the `v`'s as the new representation of `e[i]`. Note that `q`, `k` and `v` are derived from the *same* sequence, meaning the sequence is effectively querying itself (hence the name Self-Attention).
 
 <p align="center">
-  <img src="g3doc/images/teaser1.png" width="600">
+  <img src="g3doc/images/teaser2.png" width="800">
 
   <br>
-  Compute a new embedding matrix of Query by making it attend to Reference. It ends up being Self-Attention when Query and Reference happen to be the same matrix.
+  Self-Attention mechanism. 
 </p>
 
 
