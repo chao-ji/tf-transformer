@@ -419,12 +419,14 @@ class TransformerModel(tf.keras.layers.Layer):
 
     look_ahead_mask = utils.get_look_ahead_mask(tgt_seq_len)
 
+    # [batch_size, tgt_seq_len, hidden_size]
     decoder_outputs = self._decoder(tgt_token_embeddings, 
                                     encoder_outputs, 
                                     look_ahead_mask, 
                                     padding_mask, 
                                     training=True)
 
+    # [batch_size, tgt_seq_len, vocab_size]
     logits = self._embedding_logits_layer(decoder_outputs, 'logits')
     return logits
 
@@ -597,6 +599,7 @@ class TransformerModel(tf.keras.layers.Layer):
       decoder_input = self._embedding_logits_layer(decoder_input, 'embedding')
       decoder_input += timing_signal[index:index + 1]
 
+      # [batch_size * beam_width, 1, hidden_size]
       decoder_outputs = self._decoder(decoder_input,
                                       cache['encoder_outputs'],
                                       tf.zeros((1, 1, 1, index + 1), 
@@ -605,6 +608,7 @@ class TransformerModel(tf.keras.layers.Layer):
                                       training=False,
                                       cache=cache)
 
+      # [[batch_size * beam_width, 1, vocab_size]
       logits = self._embedding_logits_layer(decoder_outputs, mode='logits')
       logits = tf.squeeze(logits, axis=1)
       return logits, cache

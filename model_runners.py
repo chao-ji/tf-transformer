@@ -12,6 +12,7 @@ from nltk.translate.bleu_score import corpus_bleu
 from utils import compute_loss
 from commons import utils
 from commons import tokenization
+from commons.tokenization import SOS_ID
 
 
 class SequenceTransducerTrainer(object):
@@ -72,7 +73,7 @@ class SequenceTransducerTrainer(object):
         src_token_ids: int tensor of shape [batch_size, src_seq_len], lists of
           subtoken ids of batched source sequences ending with EOS_ID and 
           zero-padded.
-        tgt_token_ids: int tensor of shape [batch_size, src_seq_len], lists of
+        tgt_token_ids: int tensor of shape [batch_size, tgt_seq_len], lists of
           subtoken ids of batched target sequences ending with EOS_ID and 
           zero-padded.
 
@@ -85,12 +86,14 @@ class SequenceTransducerTrainer(object):
         # for each sequence of subtokens s1, s2, ..., sn, 1
         # prepend it with 0 (SOS_ID) and truncate it to the same length:
         # 0, s1, s2, ..., sn
-        tgt_token_ids_input = tf.pad(tgt_token_ids, [[0, 0], [1, 0]])[:, :-1]
+        tgt_token_ids_input = tf.pad(
+            tgt_token_ids, [[0, 0], [1, 0]], constant_values=SOS_ID)[:, :-1]
         logits = self._model(src_token_ids, tgt_token_ids_input, training=True)
         loss = compute_loss(tgt_token_ids,
                             logits,
                             self._label_smoothing,
-                            self._model._vocab_size)
+                            self._model._vocab_size,
+                            padding_value=SOS_ID)
 
       gradients = tape.gradient(loss, self._model.trainable_variables)
       if clip_norm is not None:
@@ -99,7 +102,7 @@ class SequenceTransducerTrainer(object):
           zip(gradients, self._model.trainable_variables))
 
       step = optimizer.iterations
-      lr = optimizer.learning_rate(step)
+      lr = optimizer.learning_rate
       return loss, step - 1, lr
 
     summary_writer = tf.summary.create_file_writer(logdir)
@@ -219,8 +222,8 @@ class SequenceTransducerEvaluator(object):
     Args:
       source_text_filename: string scalar, name of the text file storing source 
         sequences, lines separated by '\n'.
-      target_text_filename: (Optional) string scalar, name of the text file 
-        storing target sequences, lines separated by '\n'.
+      target_text_filename: string scalar, name of the text file storing target
+        sequences, lines separated by '\n'.
       output_filename: (Optional) name of the file that translations will be 
         written to.
 
@@ -299,9 +302,8 @@ def _get_sorted_lines(filename):
   """
   with tf.io.gfile.GFile(filename) as f:
     lines = f.read().split('\n')
-    # split line by single-space ' '
+    # remove leading and trailing spaces
     lines = [line.strip() for line in lines]
-    # skip empty lines
     if len(lines[-1]) == 0:
       lines.pop()
 
